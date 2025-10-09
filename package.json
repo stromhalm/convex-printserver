@@ -1,0 +1,32 @@
+{
+  "name": "convex-printserver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && cp -r convex/_generated dist/convex/",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "convex": "^1.27.5",
+    "dotenv": "^17.2.3",
+    "form-data": "^4.0.4",
+    "node-fetch": "^2.7.0",
+    "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/form-data": "^2.2.1",
+    "@types/node": "^24.7.1",
+    "@types/node-fetch": "^2.6.13",
+    "@types/yargs": "^17.0.33",
+    "convex-test": "^0.0.38",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

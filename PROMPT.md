@@ -42,6 +42,10 @@ node print test-files/product-label.pdf my-client Brother_Printer "-o media=Cust
 
 This will send a print job to the printer "Brother_Printer" that is known to the client with the ID "my-client".
 
+## Testing
+
+Run the tests at your convenience, but do not use watch mode, because you might not be able to exit the process.
+
 ## Authentication
 
 Authentication can be simple. For example, use a simple API key to ensure only trusted applications can create or receive print jobs.
