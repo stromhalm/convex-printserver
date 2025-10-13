@@ -65,15 +65,21 @@ Use the `print` command to send a file to a specific client and printer.
 **Syntax:**
 
 ```
-npm run print <file_path> <client_id> <printer_name> [cups_options]
+node print <file_path> <client_id> <printer_name> [cups_options]
 ```
 
-**Example:**
+**Examples:**
 
-This sends a test PDF to the `Brother_Printer` printer, which is handled by the `my-office-client` client. It also specifies a custom paper size.
+Basic print job:
 
 ```bash
-npm run print test-files/product-label.pdf my-office-client Brother_Printer "-o media=Custom.62x50mm -o cutMedia=endOfPage"
+node print test-files/product-label.pdf my-office-client Brother_Printer
+```
+
+With CUPS options:
+
+```bash
+node print test-files/product-label.pdf my-office-client Brother_Printer "-o media=Custom.62x50mm -o cutMedia=endOfPage"
 ```
 
 ## Data Cleanup

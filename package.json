@@ -6,7 +6,6 @@
   "scripts": {
     "client": "tsx src/client.ts",
     "client-log": "tsx src/client.ts --log",
-    "print": "tsx src/print.ts",
     "test": "vitest run"
   },
   "keywords": [],
