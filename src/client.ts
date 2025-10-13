@@ -143,9 +143,6 @@ export async function main() {
         
         await handleJob(job, client, logOnly);
         isProcessing = false;
-        
-        // Brief pause before checking for next job
-        await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error("Error processing startup jobs:", error);
         isProcessing = false;
