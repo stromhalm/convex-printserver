@@ -7,29 +7,33 @@ import FormData from "form-data";
 import "dotenv/config";
 
 async function main() {
-  const argv = await yargs(hideBin(process.argv))
-    .usage('Usage: node print <file> <clientId> <printerId> -- <cupsOptions...>')
+  const { file, clientId, printerId, cupsOptions } = await yargs(hideBin(process.argv))
+    .command('$0 <file> <clientId> <printerId> [cupsOptions]', 'Sends a print job to a client.', (yargs) => {
+      return yargs
+        .positional('file', {
+          describe: 'Path to the file to print',
+          type: 'string',
+        })
+        .positional('clientId', {
+          describe: 'The ID of the print client',
+          type: 'string',
+        })
+        .positional('printerId', {
+          describe: 'The name of the printer to use',
+          type: 'string',
+        })
+        .positional('cupsOptions', {
+          describe: 'Optional string of CUPS options',
+          type: 'string',
+          default: '',
+        });
+    })
+    .demandCommand(3, 'You must provide at least a file, client ID, and printer ID.')
+    .help()
     .argv;
 
-  if (argv._.length < 4) {
-    console.error('Usage: node print <file> <clientId> <printerId> <cupsOptions...>');
-    console.error('Use -- to separate CUPS options from script options');
-    console.error('Example: node print file.pdf client printer -- -o option1 -o option2');
-    console.error(`Expected at least 4 arguments, got ${argv._.length}`);
-    process.exit(1);
-  }
-
-  const [file, clientId, printerId, ...cupsOptionsParts] = argv._;
-  const cupsOptions = cupsOptionsParts.join(' ');
-
-  if (
-    typeof file !== "string" ||
-    typeof clientId !== "string" ||
-    typeof printerId !== "string" ||
-    typeof cupsOptions !== "string"
-  ) {
-    console.error('Usage: node print <file> <clientId> <printerId> <cupsOptions...>');
-    console.error('Use -- to separate CUPS options from script options');
+  if (typeof file !== 'string' || typeof clientId !== 'string' || typeof printerId !== 'string') {
+    console.error('Invalid arguments. Please provide a file, client ID, and printer ID.');
     process.exit(1);
   }
 

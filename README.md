@@ -42,14 +42,6 @@ This project implements a simple, real-time print server using [Convex](https://
     npx convex dev
     ```
 
-4.  **Build the Client Code:**
-
-    Compile the TypeScript client and print tools:
-
-    ```bash
-    npm run build
-    ```
-
 ## Usage
 
 ### Starting the Client
@@ -57,13 +49,13 @@ This project implements a simple, real-time print server using [Convex](https://
 To start a print client, you need to give it a unique `clientId`. The client will listen for any jobs assigned to this ID.
 
 ```bash
-node dist/client.js my-office-client
+npm run client my-office-client
 ```
 
-To start the client in **log-only mode** (where it will log job details instead of sending them to the printer), use the `--log` flag:
+To start the client in **log-only mode** (where it will log job details instead of sending them to the printer), use the `client-log` command:
 
 ```bash
-node dist/client.js my-office-client --log
+npm run client-log my-office-client
 ```
 
 ### Submitting a Print Job
@@ -73,7 +65,7 @@ Use the `print` command to send a file to a specific client and printer.
 **Syntax:**
 
 ```
-node dist/print.js <file_path> <client_id> <printer_name> -- <cups_options>
+npm run print <file_path> <client_id> <printer_name> [cups_options]
 ```
 
 **Example:**
@@ -81,7 +73,7 @@ node dist/print.js <file_path> <client_id> <printer_name> -- <cups_options>
 This sends a test PDF to the `Brother_Printer` printer, which is handled by the `my-office-client` client. It also specifies a custom paper size.
 
 ```bash
-node dist/print.js test-files/product-label.pdf my-office-client Brother_Printer -- -o media=Custom.62x50mm -o cutMedia=endOfPage
+npm run print test-files/product-label.pdf my-office-client Brother_Printer "-o media=Custom.62x50mm -o cutMedia=endOfPage"
 ```
 
 ## Data Cleanup

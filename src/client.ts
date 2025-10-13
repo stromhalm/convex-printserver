@@ -15,13 +15,22 @@ let isProcessing = false;
 let startupProcessing = false;
 
 async function main() {
-  const argv = await yargs(hideBin(process.argv))
-    .demandCommand(1)
-    .usage("Usage: node client <clientId> [--log]")
-    .options({ log: { type: "boolean", default: false } }).argv;
-
-  const [clientId] = argv._;
-  const { log: logOnly } = argv;
+  const { clientId, log: logOnly } = await yargs(hideBin(process.argv))
+    .command('$0 <clientId>', 'Starts the print client.', (yargs) => {
+      return yargs
+        .positional('clientId', {
+          describe: 'The ID of the print client',
+          type: 'string',
+        })
+        .option('log', {
+          describe: 'Log jobs to the console instead of printing',
+          type: 'boolean',
+          default: false,
+        });
+    })
+    .demandCommand(1, 'You must provide a client ID.')
+    .help()
+    .argv;
 
   if (typeof clientId !== "string") {
     console.error("Error: clientId must be a string.");
@@ -112,7 +121,11 @@ async function main() {
       console.log(`  File downloaded to: ${tempFilePath}`);
 
       // Print the file
-      const printCommand = `lp -d "${job.printerId}" ${job.cupsOptions} "${tempFilePath}"`;
+      let printCommand = `lp -d "${job.printerId}"`;
+      if (job.cupsOptions) {
+        printCommand += ` ${job.cupsOptions}`;
+      }
+      printCommand += ` "${tempFilePath}"`;
       console.log(`  Executing: ${printCommand}`);
 
       await new Promise<void>((resolve, reject) => {
