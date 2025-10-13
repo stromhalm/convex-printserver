@@ -10,13 +10,15 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      return new Response("API_KEY is not set", { status: 500 });
-    }
-
-    const providedApiKey = request.headers.get("x-api-key");
-    if (providedApiKey !== apiKey) {
-      return new Response("Unauthorized", { status: 401 });
+    if (apiKey) {
+      const providedApiKey = request.headers.get("x-api-key");
+      if (providedApiKey !== apiKey) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("Warning: API_KEY not set; allowing unauthenticated HTTP /print requests.");
+      }
     }
 
     const formData = await request.formData();

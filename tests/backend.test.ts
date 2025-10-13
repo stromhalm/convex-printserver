@@ -1,11 +1,14 @@
 
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeEach, vi } from "vitest";
 import { convexTest } from "convex-test";
 import { api } from "../convex/_generated/api.js";
 import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 describe("Print Job Backend Logic", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
   // A fake storage ID that passes the validator in convex-test
   const fakeFileId = "12345;_storage" as Id<"_storage">;
 

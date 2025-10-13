@@ -5,9 +5,19 @@ import type { Id } from "./_generated/dataModel.js";
 
 // Get the oldest pending job for a client
 export const getOldestPendingJob = query({
-  args: { clientId: v.string() },
+  args: { clientId: v.string(), apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const expectedApiKey = process.env.API_KEY;
+    if (expectedApiKey) {
+      if (args.apiKey !== expectedApiKey) {
+        throw new Error("Unauthorized");
+      }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("Warning: API_KEY not set; allowing unauthenticated access to getOldestPendingJob.");
+      }
+    }
+    return ctx.db
       .query("printJobs")
       .withIndex("by_clientId", (q) => q.eq("clientId", args.clientId))
       .filter((q) => q.eq(q.field("status"), "pending"))
@@ -22,8 +32,19 @@ export const updateJobStatus = mutation({
     jobId: v.id("printJobs"),
     status: v.string(),
     error: v.optional(v.string()),
+    apiKey: v.optional(v.string()),
   },
-  handler: async (ctx, { jobId, status, error }) => {
+  handler: async (ctx, { jobId, status, error, apiKey }) => {
+    const expectedApiKey = process.env.API_KEY;
+    if (expectedApiKey) {
+      if (apiKey !== expectedApiKey) {
+        throw new Error("Unauthorized");
+      }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("Warning: API_KEY not set; allowing unauthenticated access to updateJobStatus.");
+      }
+    }
     await ctx.db.patch(jobId, { status, error });
   },
 });
@@ -37,7 +58,7 @@ export const createPrintJob = mutation({
     cupsOptions: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("printJobs", {
+    return ctx.db.insert("printJobs", {
       ...args,
       status: "pending",
     });
@@ -48,15 +69,25 @@ export const createPrintJob = mutation({
 export const getJob = query({
   args: { jobId: v.id("printJobs") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.jobId);
+    return ctx.db.get(args.jobId);
   },
 });
 
 // Get the URL for a file in storage
 export const getStorageUrl = query({
-  args: { storageId: v.id("_storage") },
+  args: { storageId: v.id("_storage"), apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    return await ctx.storage.getUrl(args.storageId);
+    const expectedApiKey = process.env.API_KEY;
+    if (expectedApiKey) {
+      if (args.apiKey !== expectedApiKey) {
+        throw new Error("Unauthorized");
+      }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("Warning: API_KEY not set; allowing unauthenticated access to getStorageUrl.");
+      }
+    }
+    return ctx.storage.getUrl(args.storageId);
   },
 });
 

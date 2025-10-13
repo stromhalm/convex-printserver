@@ -9,6 +9,7 @@ import fs from "fs/promises";
 import * as os from "os";
 import path from "path";
 import fetch from "node-fetch";
+import { fileURLToPath } from "url";
 
 let isProcessing = false;
 let startupProcessing = false;
@@ -20,9 +21,10 @@ export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boo
       await client.mutation(api.printJobs.updateJobStatus, {
         jobId: job._id,
         status: "processing",
+        apiKey: process.env.API_KEY,
       });
 
-      const fileUrl = await client.query(api.printJobs.getStorageUrl, { storageId: job.fileStorageId });
+      const fileUrl = await client.query(api.printJobs.getStorageUrl, { storageId: job.fileStorageId, apiKey: process.env.API_KEY });
       if (!fileUrl) {
         throw new Error(`Failed to get file URL for ${job.fileStorageId}`);
       }
@@ -35,6 +37,7 @@ export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boo
         await client.mutation(api.printJobs.updateJobStatus, {
           jobId: job._id,
           status: "completed",
+          apiKey: process.env.API_KEY,
         });
         console.log(`--- Job [${job._id}] Logged ---`);
         return;
@@ -74,6 +77,7 @@ export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boo
       await client.mutation(api.printJobs.updateJobStatus, {
         jobId: job._id,
         status: "completed",
+        apiKey: process.env.API_KEY,
       });
       console.log(`--- Job [${job._id}] Completed ---`);
 
@@ -86,13 +90,14 @@ export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boo
         jobId: job._id,
         status: "failed",
         error: error.message,
+        apiKey: process.env.API_KEY,
       });
       console.log(`--- Job [${job._id}] Failed ---`);
     }
   }
 
 export async function main() {
-  const {clientId, log: logOnly} = await yargs(hideBin(process.argv))
+  const {clientId, log: logOnlyRaw} = await yargs(hideBin(process.argv))
     .command('$0 <clientId>', 'Starts the print client.', (yargs) => {
       return yargs
         .positional('clientId', {
@@ -123,12 +128,13 @@ export async function main() {
 
   const client = new ConvexClient(convexUrl);
 
+  const logOnly = Boolean(logOnlyRaw);
   console.log(`Client "${clientId}" started. Waiting for print jobs...`);
   if (logOnly) {
     console.log("Operating in log-only mode. Jobs will not be printed.");
   }
 
-  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string }, (job) => {
+  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, (job) => {
     if (job && !isProcessing && !startupProcessing) {
       isProcessing = true;
       handleJob(job, client, logOnly).finally(() => {
@@ -144,7 +150,7 @@ export async function main() {
     startupProcessing = true;
     try {
       while (!isProcessing) {
-        const job = await client.query(api.printJobs.getOldestPendingJob, { clientId: clientId as string });
+        const job = await client.query(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY });
         if (!job) break; // No more pending jobs
 
         isProcessing = true;
@@ -162,6 +168,7 @@ export async function main() {
   }
 }
 
-if (require.main === module) {
-    main();
+const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMainModule) {
+  main();
 }

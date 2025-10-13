@@ -46,8 +46,7 @@ async function main() {
 
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.error("Error: API_KEY environment variable not set.");
-    process.exit(1);
+    console.warn("Warning: API_KEY not set; sending request without authentication header.");
   }
 
   // Use the proxy URL for HTTP routes (port 3211 instead of 3210)
@@ -71,7 +70,7 @@ async function main() {
     const response = await fetch(printUrl, {
       method: "POST",
       headers: {
-        "x-api-key": apiKey,
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
         ...form.getHeaders(),
       },
       body: form,

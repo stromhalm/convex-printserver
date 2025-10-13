@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { handleJob } from "../src/client";
-import type { Doc } from "../convex/_generated/dataModel";
+import { handleJob } from "../src/client.js";
+import type { Doc } from "../convex/_generated/dataModel.js";
 import { api } from "../convex/_generated/api.js";
 import { exec } from "child_process";
 import fetch from "node-fetch";
@@ -50,6 +50,7 @@ describe("Client Logic", () => {
         expect(mockClient.mutation).toHaveBeenNthCalledWith(1, api.printJobs.updateJobStatus, {
             jobId: "job123",
             status: "processing",
+            apiKey: process.env.API_KEY,
         });
         expect(fetch).toHaveBeenCalledWith("http://fake-url.com/file.pdf");
         expect(fs.writeFile).toHaveBeenCalledWith("/tmp/print-123/job-job123.pdf", Buffer.from("file content"));
@@ -60,6 +61,7 @@ describe("Client Logic", () => {
         expect(mockClient.mutation).toHaveBeenNthCalledWith(2, api.printJobs.updateJobStatus, {
             jobId: "job123",
             status: "completed",
+            apiKey: process.env.API_KEY,
         });
     });
 
@@ -69,12 +71,14 @@ describe("Client Logic", () => {
         expect(mockClient.mutation).toHaveBeenNthCalledWith(1, api.printJobs.updateJobStatus, {
             jobId: "job123",
             status: "processing",
+            apiKey: process.env.API_KEY,
         });
         expect(fetch).not.toHaveBeenCalled();
         expect(exec).not.toHaveBeenCalled();
         expect(mockClient.mutation).toHaveBeenNthCalledWith(2, api.printJobs.updateJobStatus, {
             jobId: "job123",
             status: "completed",
+            apiKey: process.env.API_KEY,
         });
     });
 
@@ -94,6 +98,7 @@ describe("Client Logic", () => {
             jobId: "job123",
             status: "failed",
             error: expect.any(String),
+            apiKey: process.env.API_KEY,
         });
     });
 
@@ -107,6 +112,7 @@ describe("Client Logic", () => {
             jobId: "job123",
             status: "failed",
             error: "Network error",
+            apiKey: process.env.API_KEY,
         });
     });
 });

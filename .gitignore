@@ -16,3 +16,5 @@ pnpm-debug.log*
 
 # Generated files
 **/*.d.ts
+
+.env.local
