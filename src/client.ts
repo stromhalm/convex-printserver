@@ -103,61 +103,43 @@ export async function main() {
     console.log("Operating in log-only mode. Jobs will not be printed.");
   }
 
-  // Use reactive subscription to watch for pending jobs
-  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, async (pendingJob) => {
-    // When a pending job appears and we're not busy, claim and process it
-    if (pendingJob && !isProcessing) {
-      isProcessing = true;
-      try {
-        // Atomically claim the job (marks as processing and returns with file URL)
-        const job = await client.mutation(api.printJobs.claimJob, { 
-          jobId: pendingJob._id,
-          apiKey: process.env.API_KEY
-        });
-        
-        if (job) {
-          await handleJob(job, logOnly);
-        }
-      } catch (error) {
-        console.error("Error claiming/processing job:", error);
-      } finally {
-        isProcessing = false;
+  // Unified job processing function
+  async function processJob(jobId: any) {
+    if (isProcessing) return;
+    
+    isProcessing = true;
+    try {
+      // Atomically claim the job (marks as completed and returns with file URL)
+      const job = await client.mutation(api.printJobs.claimJob, { 
+        jobId, 
+        apiKey: process.env.API_KEY 
+      });
+      
+      if (job) {
+        await handleJob(job, logOnly);
       }
-    }
-  });
-
-  // Process any pending jobs immediately on startup
-  async function processStartupJobs() {
-    while (true) {
-      try {
-        const pendingJob = await client.query(api.printJobs.getOldestPendingJob, {
-          clientId: clientId as string,
-          apiKey: process.env.API_KEY
-        });
-
-        if (!pendingJob) {
-          break;
-        }
-
-        isProcessing = true;
-        const job = await client.mutation(api.printJobs.claimJob, {
-          jobId: pendingJob._id,
-          apiKey: process.env.API_KEY
-        });
-
-        if (job) {
-          await handleJob(job, logOnly);
-        }
-      } catch (error) {
-        console.error("Error processing startup jobs:", error);
-        break;
-      } finally {
-        isProcessing = false;
+    } catch (error) {
+      console.error("Error claiming/processing job:", error);
+    } finally {
+      isProcessing = false;
+      
+      // Check if there are more pending jobs and process them
+      const nextJob = await client.query(api.printJobs.getOldestPendingJob, { 
+        clientId: clientId as string, 
+        apiKey: process.env.API_KEY 
+      });
+      if (nextJob) {
+        await processJob(nextJob._id);
       }
     }
   }
-  
-  processStartupJobs();
+
+  // Use reactive subscription to watch for pending jobs (handles both startup and incoming)
+  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, async (pendingJob) => {
+    if (pendingJob && !isProcessing) {
+      await processJob(pendingJob._id);
+    }
+  });
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

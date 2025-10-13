@@ -99,4 +99,54 @@ describe("Print Job Backend Logic", () => {
     const nextJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
     expect(nextJob).toBeNull();
   });
+
+  test("should process multiple pending jobs in order", async () => {
+    const t = convexTest(schema);
+    
+    // Create 3 jobs
+    const jobId1 = await t.mutation(api.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    const jobId2 = await t.mutation(api.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    const jobId3 = await t.mutation(api.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    // Claim first job
+    const job1 = await t.mutation(api.printJobs.claimJob, { jobId: jobId1 });
+    expect(job1?._id).toEqual(jobId1);
+
+    // Second job should now be oldest pending
+    let oldestJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
+    expect(oldestJob?._id).toEqual(jobId2);
+
+    // Claim second job
+    const job2 = await t.mutation(api.printJobs.claimJob, { jobId: jobId2 });
+    expect(job2?._id).toEqual(jobId2);
+
+    // Third job should now be oldest pending
+    oldestJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
+    expect(oldestJob?._id).toEqual(jobId3);
+
+    // Claim third job
+    const job3 = await t.mutation(api.printJobs.claimJob, { jobId: jobId3 });
+    expect(job3?._id).toEqual(jobId3);
+
+    // No more pending jobs
+    oldestJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
+    expect(oldestJob).toBeNull();
+  });
 });
