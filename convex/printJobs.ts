@@ -1,6 +1,7 @@
 
 import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel.js";
 
 // Get the oldest pending job for a client
 export const getOldestPendingJob = query({
@@ -56,5 +57,61 @@ export const getStorageUrl = query({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, args) => {
     return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
+// Clean up old jobs and files
+export const cleanupOldData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const maxAgeDays = parseInt(process.env.CLEANUP_MAX_AGE_DAYS || "30");
+    const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+    const cutoffTime = Date.now() - maxAgeMs;
+
+    console.log(`Cleaning up data older than ${maxAgeDays} days (${new Date(cutoffTime).toISOString()})`);
+
+    // Get all old jobs
+    const oldJobs = await ctx.db
+      .query("printJobs")
+      .filter((q) => q.lt(q.field("_creationTime"), cutoffTime))
+      .collect();
+
+    console.log(`Found ${oldJobs.length} old jobs to delete`);
+
+    // Collect storage IDs that are no longer referenced
+    const storageIdsToDelete = new Set<Id<"_storage">>();
+
+    // Delete old jobs and collect their storage IDs
+    for (const job of oldJobs) {
+      storageIdsToDelete.add(job.fileStorageId);
+      await ctx.db.delete(job._id);
+    }
+
+    console.log(`Deleted ${oldJobs.length} old jobs`);
+
+    // Check which storage IDs are still referenced by remaining jobs
+    const remainingJobs = await ctx.db.query("printJobs").collect();
+    const referencedStorageIds = new Set<Id<"_storage">>(remainingJobs.map(job => job.fileStorageId));
+
+    // Delete storage files that are no longer referenced
+    let deletedFilesCount = 0;
+    for (const storageId of storageIdsToDelete) {
+      if (!referencedStorageIds.has(storageId)) {
+        try {
+          await ctx.storage.delete(storageId);
+          deletedFilesCount++;
+        } catch (error) {
+          console.error(`Failed to delete storage file ${storageId}:`, error);
+        }
+      }
+    }
+
+    console.log(`Deleted ${deletedFilesCount} unreferenced storage files`);
+
+    return {
+      deletedJobs: oldJobs.length,
+      deletedFiles: deletedFilesCount,
+      cutoffTime: new Date(cutoffTime).toISOString(),
+    };
   },
 });

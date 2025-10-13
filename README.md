@@ -73,7 +73,7 @@ Use the `print` command to send a file to a specific client and printer.
 **Syntax:**
 
 ```
-node dist/print.js <file_path> <client_id> <printer_name> "<cups_options>"
+node dist/print.js <file_path> <client_id> <printer_name> -- <cups_options>
 ```
 
 **Example:**
@@ -81,8 +81,23 @@ node dist/print.js <file_path> <client_id> <printer_name> "<cups_options>"
 This sends a test PDF to the `Brother_Printer` printer, which is handled by the `my-office-client` client. It also specifies a custom paper size.
 
 ```bash
-node dist/print.js test-files/product-label.pdf my-office-client Brother_Printer "-o media=Custom.62x50mm -o cutMedia=endOfPage"
+node dist/print.js test-files/product-label.pdf my-office-client Brother_Printer -- -o media=Custom.62x50mm -o cutMedia=endOfPage
 ```
+
+## Data Cleanup
+
+The system automatically cleans up old print jobs and files on a daily schedule. By default, data older than 30 days is deleted. This includes:
+
+- Completed, failed, and processing print jobs
+- Associated files in storage that are no longer referenced
+
+To configure the cleanup age:
+
+```bash
+npx convex env set CLEANUP_MAX_AGE_DAYS 7  # Clean up data older than 7 days
+```
+
+The cleanup runs daily at 2:00 AM UTC via an automated cron job defined in `convex/crons.ts`.
 
 ## Testing
 
