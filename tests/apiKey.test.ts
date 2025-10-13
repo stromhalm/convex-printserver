@@ -7,9 +7,7 @@ import type { Id } from "../convex/_generated/dataModel.js";
 describe("API Key Enforcement", () => {
   const fakeFileId = "12345;_storage" as Id<"_storage">;
 
-  beforeEach(() => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-  });
+  
 
   let prevApiKey: string | undefined;
   beforeEach(() => {
@@ -43,7 +41,7 @@ describe("API Key Enforcement", () => {
     ).rejects.toThrowError(/Unauthorized/);
 
     await expect(
-      t.mutation(api.printJobs.claimNextJob, { clientId: "c1", apiKey: "wrong" })
+      t.mutation(api.printJobs.claimJob, { jobId, apiKey: "wrong" })
     ).rejects.toThrowError(/Unauthorized/);
   });
 
@@ -63,7 +61,7 @@ describe("API Key Enforcement", () => {
     const url = await t.query(api.printJobs.getStorageUrl, { storageId: fakeFileId, apiKey: "secret" });
     expect(typeof url === "string" || url === null).toBe(true);
 
-    const claimedJob = await t.mutation(api.printJobs.claimNextJob, { clientId: "c1", apiKey: "secret" });
+    const claimedJob = await t.mutation(api.printJobs.claimJob, { jobId, apiKey: "secret" });
     expect(claimedJob?._id).toEqual(jobId);
     expect(claimedJob?.fileUrl).toBeDefined();
     

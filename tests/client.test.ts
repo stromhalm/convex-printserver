@@ -1,6 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { handleJob } from "../src/client.js";
-import { api } from "../convex/_generated/api.js";
 import { exec } from "child_process";
 import fetch from "node-fetch";
 
@@ -26,6 +25,7 @@ describe("Client Logic", () => {
 
     beforeEach(() => {
         vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.clearAllMocks();
     });
 
@@ -44,7 +44,7 @@ describe("Client Logic", () => {
             return { stdin: mockStdin } as any;
         });
 
-        await handleJob(fakeJob, mockClient, false);
+        await handleJob(fakeJob, false);
 
         expect(fetch).toHaveBeenCalledWith("http://fake-url.com/file.pdf");
         expect(exec).toHaveBeenCalledWith(
@@ -56,7 +56,7 @@ describe("Client Logic", () => {
     });
 
     test("handleJob should process a print job in log-only mode", async () => {
-        await handleJob(fakeJob, mockClient, true);
+        await handleJob(fakeJob, true);
 
         expect(fetch).not.toHaveBeenCalled();
         expect(exec).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe("Client Logic", () => {
             return { stdin: {} } as any;
         });
 
-        await handleJob(fakeJob, mockClient, false);
+        await handleJob(fakeJob, false);
 
         expect(mockClient.mutation).not.toHaveBeenCalled();
     });
@@ -84,7 +84,7 @@ describe("Client Logic", () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
 
-        await handleJob(fakeJob, mockClient, false);
+        await handleJob(fakeJob, false);
 
         expect(mockClient.mutation).not.toHaveBeenCalled();
     });

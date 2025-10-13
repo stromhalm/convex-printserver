@@ -3,9 +3,9 @@ import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.js";
 
-// Atomically claim the oldest pending job for a client and return it with file URL
-export const claimNextJob = mutation({
-  args: { clientId: v.string(), apiKey: v.optional(v.string()) },
+// Atomically claim a job for a client and return it with file URL
+export const claimJob = mutation({
+  args: { jobId: v.id("printJobs"), apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const expectedApiKey = process.env.API_KEY;
     if (expectedApiKey) {
@@ -14,16 +14,11 @@ export const claimNextJob = mutation({
       }
     } else {
       if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated access to claimNextJob.");
+        console.warn("Warning: API_KEY not set; allowing unauthenticated access to claimJob.");
       }
     }
     
-    const job = await ctx.db
-      .query("printJobs")
-      .withIndex("by_clientId", (q) => q.eq("clientId", args.clientId))
-      .filter((q) => q.eq(q.field("status"), "pending"))
-      .order("asc")
-      .first();
+    const job = await ctx.db.get(args.jobId);
     
     if (!job) return null;
     

@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 
 let isProcessing = false;
 
-export async function handleJob(job: any, client: any, logOnly: boolean) {
+export async function handleJob(job: any, logOnly: boolean) {
     console.log(`\n--- Processing Job [${job._id}] ---`);
     try {
       if (!job.fileUrl) {
@@ -110,13 +110,13 @@ export async function main() {
       isProcessing = true;
       try {
         // Atomically claim the job (marks as processing and returns with file URL)
-        const job = await client.mutation(api.printJobs.claimNextJob, { 
-          clientId: clientId as string, 
-          apiKey: process.env.API_KEY 
+        const job = await client.mutation(api.printJobs.claimJob, { 
+          jobId: pendingJob._id,
+          apiKey: process.env.API_KEY
         });
         
         if (job) {
-          await handleJob(job, client, logOnly);
+          await handleJob(job, logOnly);
         }
       } catch (error) {
         console.error("Error claiming/processing job:", error);
@@ -128,25 +128,31 @@ export async function main() {
 
   // Process any pending jobs immediately on startup
   async function processStartupJobs() {
-    while (!isProcessing) {
+    while (true) {
       try {
-        isProcessing = true;
-        const job = await client.mutation(api.printJobs.claimNextJob, { 
-          clientId: clientId as string, 
-          apiKey: process.env.API_KEY 
+        const pendingJob = await client.query(api.printJobs.getOldestPendingJob, {
+          clientId: clientId as string,
+          apiKey: process.env.API_KEY
         });
-        
-        if (!job) {
-          isProcessing = false;
+
+        if (!pendingJob) {
           break;
         }
-        
-        await handleJob(job, client, logOnly);
-        isProcessing = false;
+
+        isProcessing = true;
+        const job = await client.mutation(api.printJobs.claimJob, {
+          jobId: pendingJob._id,
+          apiKey: process.env.API_KEY
+        });
+
+        if (job) {
+          await handleJob(job, logOnly);
+        }
       } catch (error) {
         console.error("Error processing startup jobs:", error);
-        isProcessing = false;
         break;
+      } finally {
+        isProcessing = false;
       }
     }
   }

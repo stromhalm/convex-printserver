@@ -1,13 +1,22 @@
 
-import { describe, test, expect, beforeEach, vi } from "vitest";
+import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { convexTest } from "convex-test";
 import { api } from "../convex/_generated/api.js";
 import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 describe("Print Job Backend Logic", () => {
+  let prevApiKey: string | undefined;
   beforeEach(() => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    prevApiKey = process.env.API_KEY;
+    delete process.env.API_KEY;
+  });
+  afterEach(() => {
+    if (prevApiKey === undefined) {
+      delete process.env.API_KEY;
+    } else {
+      process.env.API_KEY = prevApiKey;
+    }
   });
   // A fake storage ID that passes the validator in convex-test
   const fakeFileId = "12345;_storage" as Id<"_storage">;
@@ -68,7 +77,7 @@ describe("Print Job Backend Logic", () => {
     expect(job).toBeNull();
   });
 
-  test("claimNextJob should mark job as completed and return with URL", async () => {
+  test("claimJob should mark job as completed and return with URL", async () => {
     const t = convexTest(schema);
     const jobId = await t.mutation(api.printJobs.createPrintJob, {
       clientId: "client1",
@@ -77,7 +86,7 @@ describe("Print Job Backend Logic", () => {
       cupsOptions: "",
     });
 
-    const claimedJob = await t.mutation(api.printJobs.claimNextJob, { clientId: "client1" });
+    const claimedJob = await t.mutation(api.printJobs.claimJob, { jobId });
     expect(claimedJob).not.toBeNull();
     expect(claimedJob?._id).toEqual(jobId);
     expect(claimedJob?.fileUrl).toBeDefined();
