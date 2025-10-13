@@ -43,7 +43,7 @@ describe("API Key Enforcement", () => {
     ).rejects.toThrowError(/Unauthorized/);
 
     await expect(
-      t.mutation(api.printJobs.updateJobStatus, { jobId, status: "completed", apiKey: "wrong" })
+      t.mutation(api.printJobs.claimNextJob, { clientId: "c1", apiKey: "wrong" })
     ).rejects.toThrowError(/Unauthorized/);
   });
 
@@ -63,7 +63,10 @@ describe("API Key Enforcement", () => {
     const url = await t.query(api.printJobs.getStorageUrl, { storageId: fakeFileId, apiKey: "secret" });
     expect(typeof url === "string" || url === null).toBe(true);
 
-    await t.mutation(api.printJobs.updateJobStatus, { jobId, status: "completed", apiKey: "secret" });
+    const claimedJob = await t.mutation(api.printJobs.claimNextJob, { clientId: "c1", apiKey: "secret" });
+    expect(claimedJob?._id).toEqual(jobId);
+    expect(claimedJob?.fileUrl).toBeDefined();
+    
     const none = await t.query(api.printJobs.getOldestPendingJob, { clientId: "c1", apiKey: "secret" });
     expect(none).toBeNull();
   });

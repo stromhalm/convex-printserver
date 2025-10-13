@@ -41,24 +41,17 @@ async function main() {
     process.exit(1);
   }
 
-  const fileStats = fs.statSync(filePath);
-
   try {
     const form = new FormData();
     form.append("clientId", clientId);
     form.append("printerId", printerId);
     form.append("cupsOptions", cupsOptionsStr);
-    form.append("file", fs.createReadStream(filePath), {
-      filename: path.basename(filePath),
-      knownLength: fileStats.size,
-      contentType: path.extname(filePath).toLowerCase() === ".pdf" ? "application/pdf" : "application/octet-stream",
-    });
+    form.append("file", fs.createReadStream(filePath));
 
     const response = await fetch(printUrl, {
       method: "POST",
       headers: {
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
-        ...form.getHeaders(),
+        ...(apiKey ? { "x-api-key": apiKey } : {})
       },
       body: form,
     });

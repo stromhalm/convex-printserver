@@ -3,6 +3,43 @@ import { query, mutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.js";
 
+// Atomically claim the oldest pending job for a client and return it with file URL
+export const claimNextJob = mutation({
+  args: { clientId: v.string(), apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const expectedApiKey = process.env.API_KEY;
+    if (expectedApiKey) {
+      if (args.apiKey !== expectedApiKey) {
+        throw new Error("Unauthorized");
+      }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("Warning: API_KEY not set; allowing unauthenticated access to claimNextJob.");
+      }
+    }
+    
+    const job = await ctx.db
+      .query("printJobs")
+      .withIndex("by_clientId", (q) => q.eq("clientId", args.clientId))
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .order("asc")
+      .first();
+    
+    if (!job) return null;
+    
+    // Atomically mark as completed and get file URL in parallel
+    const [, fileUrl] = await Promise.all([
+      ctx.db.patch(job._id, { status: "completed" }),
+      ctx.storage.getUrl(job.fileStorageId),
+    ]);
+    
+    return {
+      ...job,
+      fileUrl,
+    };
+  },
+});
+
 // Get the oldest pending job for a client
 export const getOldestPendingJob = query({
   args: { clientId: v.string(), apiKey: v.optional(v.string()) },
@@ -26,28 +63,6 @@ export const getOldestPendingJob = query({
   },
 });
 
-// Update the status of a print job
-export const updateJobStatus = mutation({
-  args: {
-    jobId: v.id("printJobs"),
-    status: v.string(),
-    error: v.optional(v.string()),
-    apiKey: v.optional(v.string()),
-  },
-  handler: async (ctx, { jobId, status, error, apiKey }) => {
-    const expectedApiKey = process.env.API_KEY;
-    if (expectedApiKey) {
-      if (apiKey !== expectedApiKey) {
-        throw new Error("Unauthorized");
-      }
-    } else {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated access to updateJobStatus.");
-      }
-    }
-    await ctx.db.patch(jobId, { status, error });
-  },
-});
 
 // Create a new print job
 export const createPrintJob = mutation({

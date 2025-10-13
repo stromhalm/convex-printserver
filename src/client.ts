@@ -2,66 +2,43 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
-import type { Doc } from "../convex/_generated/dataModel.js";
 import "dotenv/config";
 import { exec } from "child_process";
-import fs from "fs/promises";
-import * as os from "os";
-import path from "path";
 import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 
 let isProcessing = false;
-let startupProcessing = false;
 
-export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boolean) {
+export async function handleJob(job: any, client: any, logOnly: boolean) {
     console.log(`\n--- Processing Job [${job._id}] ---`);
     try {
-      // Mark job as processing
-      await client.mutation(api.printJobs.updateJobStatus, {
-        jobId: job._id,
-        status: "processing",
-        apiKey: process.env.API_KEY,
-      });
-
-      const fileUrl = await client.query(api.printJobs.getStorageUrl, { storageId: job.fileStorageId, apiKey: process.env.API_KEY });
-      if (!fileUrl) {
-        throw new Error(`Failed to get file URL for ${job.fileStorageId}`);
+      if (!job.fileUrl) {
+        throw new Error(`No file URL provided for job ${job._id}`);
       }
 
       if (logOnly) {
         console.log(`  Client: ${job.clientId}`);
         console.log(`  Printer: ${job.printerId}`);
-        console.log(`  File URL: ${fileUrl}`);
+        console.log(`  File URL: ${job.fileUrl}`);
         console.log(`  CUPS Options: ${job.cupsOptions}`);
-        await client.mutation(api.printJobs.updateJobStatus, {
-          jobId: job._id,
-          status: "completed",
-          apiKey: process.env.API_KEY,
-        });
-        console.log(`--- Job [${job._id}] Logged ---`);
+        console.log(`--- Job [${job._id}] Completed ---`);
         return;
       }
 
-      // Download file to a temporary location
-      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "print-"));
-      const tempFilePath = path.join(tempDir, `job-${job._id}.pdf`);
-      const response = await fetch(fileUrl);
-      const buffer = await response.arrayBuffer();
-      await fs.writeFile(tempFilePath, Buffer.from(buffer));
-
-      console.log(`  File downloaded to: ${tempFilePath}`);
-
-      // Print the file
+      // Stream file directly to printer via stdin (no temp file needed)
       let printCommand = `lp -d "${job.printerId}"`;
       if (job.cupsOptions) {
         printCommand += ` ${job.cupsOptions}`;
       }
-      printCommand += ` "${tempFilePath}"`;
       console.log(`  Executing: ${printCommand}`);
 
+      const response = await fetch(job.fileUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+
       await new Promise<void>((resolve, reject) => {
-        exec(printCommand, (error, stdout, stderr) => {
+        const child = exec(printCommand, (error, stdout, stderr) => {
           if (error) {
             console.error(`Print command failed: ${error.message}`);
             if (stderr) console.error(`Stderr: ${stderr}`);
@@ -71,27 +48,19 @@ export async function handleJob(job: Doc<"printJobs">, client: any, logOnly: boo
           if (stdout) console.log(`Stdout: ${stdout}`);
           resolve();
         });
+
+        // Stream response directly to lp stdin
+        if (child.stdin && response.body) {
+          response.body.pipe(child.stdin);
+        } else {
+          reject(new Error("Failed to pipe file to print command"));
+        }
       });
 
-      // Mark job as completed
-      await client.mutation(api.printJobs.updateJobStatus, {
-        jobId: job._id,
-        status: "completed",
-        apiKey: process.env.API_KEY,
-      });
       console.log(`--- Job [${job._id}] Completed ---`);
-
-      // Cleanup
-      await fs.rm(tempDir, { recursive: true, force: true });
 
     } catch (error: any) {
       console.error(`Failed to process job ${job._id}:`, error);
-      await client.mutation(api.printJobs.updateJobStatus, {
-        jobId: job._id,
-        status: "failed",
-        error: error.message,
-        apiKey: process.env.API_KEY,
-      });
       console.log(`--- Job [${job._id}] Failed ---`);
     }
   }
@@ -134,38 +103,58 @@ export async function main() {
     console.log("Operating in log-only mode. Jobs will not be printed.");
   }
 
-  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, (job) => {
-    if (job && !isProcessing && !startupProcessing) {
+  // Use reactive subscription to watch for pending jobs
+  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, async (pendingJob) => {
+    // When a pending job appears and we're not busy, claim and process it
+    if (pendingJob && !isProcessing) {
       isProcessing = true;
-      handleJob(job, client, logOnly).finally(() => {
+      try {
+        // Atomically claim the job (marks as processing and returns with file URL)
+        const job = await client.mutation(api.printJobs.claimNextJob, { 
+          clientId: clientId as string, 
+          apiKey: process.env.API_KEY 
+        });
+        
+        if (job) {
+          await handleJob(job, client, logOnly);
+        }
+      } catch (error) {
+        console.error("Error claiming/processing job:", error);
+      } finally {
         isProcessing = false;
-      });
+      }
     }
   });
 
-  // Check for any pending jobs on startup and process them all
-  processAllPendingJobs();
-
-  async function processAllPendingJobs() {
-    startupProcessing = true;
-    try {
-      while (!isProcessing) {
-        const job = await client.query(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY });
-        if (!job) break; // No more pending jobs
-
+  // Process any pending jobs immediately on startup
+  async function processStartupJobs() {
+    while (!isProcessing) {
+      try {
         isProcessing = true;
+        const job = await client.mutation(api.printJobs.claimNextJob, { 
+          clientId: clientId as string, 
+          apiKey: process.env.API_KEY 
+        });
+        
+        if (!job) {
+          isProcessing = false;
+          break;
+        }
+        
         await handleJob(job, client, logOnly);
         isProcessing = false;
-
+        
         // Brief pause before checking for next job
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error("Error processing startup jobs:", error);
+        isProcessing = false;
+        break;
       }
-    } catch (error) {
-      console.error("Error processing pending jobs:", error);
-    } finally {
-      startupProcessing = false;
     }
   }
+  
+  processStartupJobs();
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

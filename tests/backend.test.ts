@@ -68,7 +68,7 @@ describe("Print Job Backend Logic", () => {
     expect(job).toBeNull();
   });
 
-  test("getOldestPendingJob should not return non-pending jobs", async () => {
+  test("claimNextJob should mark job as completed and return with URL", async () => {
     const t = convexTest(schema);
     const jobId = await t.mutation(api.printJobs.createPrintJob, {
       clientId: "client1",
@@ -77,28 +77,17 @@ describe("Print Job Backend Logic", () => {
       cupsOptions: "",
     });
 
-    await t.mutation(api.printJobs.updateJobStatus, { jobId, status: "completed" });
+    const claimedJob = await t.mutation(api.printJobs.claimNextJob, { clientId: "client1" });
+    expect(claimedJob).not.toBeNull();
+    expect(claimedJob?._id).toEqual(jobId);
+    expect(claimedJob?.fileUrl).toBeDefined();
 
-    const job = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
-    expect(job).toBeNull();
-  });
+    // Job should be marked as completed in DB
+    const updatedJob = await t.query(api.printJobs.getJob, { jobId });
+    expect(updatedJob?.status).toBe("completed");
 
-  test("should update a job's status", async () => {
-    const t = convexTest(schema);
-    const jobId = await t.mutation(api.printJobs.createPrintJob, {
-      clientId: "client1",
-      printerId: "printer1",
-      fileStorageId: fakeFileId,
-      cupsOptions: "",
-    });
-
-    await t.mutation(api.printJobs.updateJobStatus, { 
-      jobId, 
-      status: "failed", 
-      error: "Printer on fire"
-    });
-
-    const job = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
-    expect(job).toBeNull(); // No longer pending
+    // Should not return the same job again as pending
+    const nextJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
+    expect(nextJob).toBeNull();
   });
 });
