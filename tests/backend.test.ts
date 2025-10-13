@@ -40,9 +40,6 @@ describe("Print Job Backend Logic", () => {
       cupsOptions: "",
     });
 
-    // Wait a moment to ensure a different creation time
-    await new Promise(resolve => setTimeout(resolve, 10));
-
     await t.mutation(api.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer2",
