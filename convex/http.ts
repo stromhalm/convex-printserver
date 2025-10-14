@@ -3,6 +3,18 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server.js";
 import { api } from "./_generated/api.js";
 
+// Normalize printer name to CUPS internal format
+// - Replace spaces with underscores
+// - Replace dots with underscores
+// - Prepend underscore if name starts with a digit
+function normalizePrinterName(name: string): string {
+  let normalized = name.replace(/[\s.]/g, '_');
+  if (/^\d/.test(normalized)) {
+    normalized = '_' + normalized;
+  }
+  return normalized;
+}
+
 const http = httpRouter();
 
 http.route({
@@ -24,12 +36,15 @@ http.route({
     const formData = await request.formData();
     const file = formData.get("file");
     const clientId = formData.get("clientId") as string;
-    const printerId = formData.get("printerId") as string;
+    const printerIdRaw = formData.get("printerId") as string;
     const cupsOptions = formData.get("cupsOptions") as string;
 
     if (!(file instanceof File)) {
       return new Response("No file uploaded", { status: 400 });
     }
+
+    // Normalize printer name to CUPS format
+    const printerId = normalizePrinterName(printerIdRaw);
 
     const fileStorageId = await ctx.storage.store(file);
 

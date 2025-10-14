@@ -68,18 +68,31 @@ Use the `print` command to send a file to a specific client and printer.
 node print <file_path> <client_id> <printer_name> [cups_options]
 ```
 
+**Printer Name Normalization:**
+
+Printer names are automatically normalized to CUPS internal format:
+- Spaces and dots are replaced with underscores
+- Names starting with digits get a leading underscore
+
+Examples:
+- `"Brother MFC-L3770CDW series"` → `Brother_MFC_L3770CDW_series`
+- `"192.168.7.101"` → `_192_168_7_101`
+- `"HP LaserJet Pro 4.01"` → `HP_LaserJet_Pro_4_01`
+
+You can use either the display name or the normalized name when submitting jobs.
+
 **Examples:**
 
 Basic print job:
 
 ```bash
-node print test-files/product-label.pdf my-office-client Brother_Printer
+node print test-files/product-label.pdf my-office-client "Brother MFC-L3770CDW series"
 ```
 
 With CUPS options:
 
 ```bash
-node print test-files/product-label.pdf my-office-client Brother_Printer "-o media=Custom.62x50mm -o cutMedia=endOfPage"
+node print test-files/product-label.pdf my-office-client 192.168.7.101 "-o media=Custom.62x50mm -o cutMedia=endOfPage"
 ```
 
 ## Data Cleanup
