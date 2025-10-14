@@ -64,6 +64,12 @@ export async function handleJob(job: any, logOnly: boolean) {
       if (protocolMatch) {
         protocol = protocolMatch[1];
         host = protocolMatch[2];
+      } else {
+        const lastSlashIndex = printerId.lastIndexOf("/");
+        if (lastSlashIndex !== -1) {
+          protocol = printerId.substring(lastSlashIndex + 1);
+          host = printerId.substring(0, lastSlashIndex);
+        }
       }
 
       const printerName = normalizePrinterName(host);

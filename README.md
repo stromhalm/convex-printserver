@@ -5,6 +5,8 @@ This is a serverless solution for printing documents from web applications using
 
 A REST endpoint is provided to submit print jobs from any external system. Jobs are received by a command-line client that listens for jobs and sends them to a CUPS printer on the local network.
 
+The serverless architecture makes it scalable and hosting costs (your Convex bill) is free for any reasonable amount of usage. This makes it the perfect replacement for paid services such as [PrintNode](https://printnode.com).
+
 ## Prerequisites
 
 - Node.js (v16+)
@@ -59,7 +61,7 @@ Use the `print` command to send a file to a specific client and printer.
 **Syntax:**
 
 ```
-npm run print -- <file_path> <client_id> <printer_name> [cups_options] [context]
+node print -- <file_path> <client_id> <printer_name> [cups_options] [context]
 ```
 
 - `context`: An optional string that can be used to save context when printing (e.g., user ID, order ID). This context can be used to search for print jobs in the Convex dashboard.
@@ -69,13 +71,13 @@ npm run print -- <file_path> <client_id> <printer_name> [cups_options] [context]
 Basic print job:
 
 ```bash
-npm run print -- test-files/product-label.pdf my-office-client "Brother MFC-L3770CDW series"
+node print -- test-files/product-label.pdf my-office-client "Brother MFC-L3770CDW series"
 ```
 
 With CUPS options and context:
 
 ```bash
-npm run print -- test-files/product-label.pdf my-office-client 192.168.7.101 "-o media=Custom.62x50mm -o cutMedia=endOfPage" "order: 123; user: 321"
+node print -- test-files/product-label.pdf my-office-client 192.168.7.101 "-o media=Custom.62x50mm -o cutMedia=endOfPage" "order: 123; user: 321"
 ```
 
 ## Features

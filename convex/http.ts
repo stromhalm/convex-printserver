@@ -37,13 +37,18 @@ http.route({
 
     const fileStorageId = await ctx.storage.store(file);
 
-    await ctx.runMutation(api.printJobs.createPrintJob, {
+    const mutationArgs: any = {
       clientId,
       printerId,
       fileStorageId,
       cupsOptions,
-      context,
-    });
+    };
+
+    if (context) {
+      mutationArgs.context = context;
+    }
+
+    await ctx.runMutation(api.printJobs.createPrintJob, mutationArgs);
 
     return new Response("Print job created");
   }),
