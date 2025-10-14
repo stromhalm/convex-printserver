@@ -8,7 +8,9 @@ export default defineSchema({
     printerId: v.string(),
     fileStorageId: v.id("_storage"),
     cupsOptions: v.string(),
-    status: v.string(), // "pending", "processing", "completed", "failed"
-    error: v.optional(v.string()),
-  }).index("by_clientId", ["clientId"]),
+    status: v.string(), // "pending", "completed"
+    context: v.optional(v.string()),
+  }).index("by_clientId", ["clientId"]).searchIndex("by_context", {
+    searchField: "context",
+  }),
 });

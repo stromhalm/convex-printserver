@@ -1,20 +1,58 @@
 
 # Convex Print Server
 
-This project implements a simple, real-time print server using [Convex](https://convex.dev) for the backend. It provides a REST endpoint to submit print jobs and a command-line client that listens for jobs and sends them to a CUPS printer.
+This is a serverless solution for printing documents from web applications using [Convex](https://convex.dev) for the backend. Perfect for logistics needs, such as printing order documents or shipping labels in a warehouse from a web UI.
 
-## Features
+A REST endpoint is provided to submit print jobs from any external system. Jobs are received by a command-line client that listens for jobs and sends them to a CUPS printer on the local network.
 
-- Real-time job delivery using Convex subscriptions (no polling).
-- Simple, secure REST endpoint with API key authentication.
-- Command-line client to connect any machine to the print server.
-- A separate command-line tool for submitting print jobs.
-- Log-only mode for debugging.
+### Automatic Printer Registration
+
+The print client will automatically register a printer with the local CUPS server if a print job is received for a printer that is not yet registered.
+
+### Protocol Support
+
+The client supports `ipp`, `socket`, and `lpd` protocols for printing. The protocol can be specified as part of the `printerId` when submitting a print job. If no protocol is specified, `ipp` is used as the default.
+
+**Examples:**
+
+- `ipp://192.168.1.100`
+- `socket://Brother_Printer`
+- `lpd://my-printer.local`
+
+### Custom Printer Drivers
+
+You can configure the client to use specific printer drivers (PPD files) for different printers. This is useful for printers that are not supported by the default `-m everywhere` option.
+
+To configure custom drivers, add entries to your `.env` file in the following format:
+
+```
+PRINTER_DRIVER_<number>="<pattern>:<driver_path>"
+```
+
+- `<number>`: A unique number to distinguish between different driver mappings (e.g., `1`, `2`, `3`).
+- `<pattern>`: A wildcard pattern to match against the printer's `protocol://host`. `*` can be used as a wildcard.
+- `<driver_path>`: The absolute path to the PPD file on the client machine.
+
+**Example:**
+
+To use the `BrotherQL820NwbCupsPpd.gz` driver for all `socket` printers, add the following line to your `.env` file:
+
+```
+PRINTER_DRIVER_1="socket://*:drivers/BrotherQL820NwbCupsPpd.gz"
+```
+
+To use a specific driver for a single printer:
+
+```
+PRINTER_DRIVER_2="ipp://192.168.1.100:drivers/MySpecificDriver.ppd"
+```
+
+If no custom driver is found for a printer, the client will use the `-m everywhere` option for `ipp` printers, and no driver option for other protocols.
 
 ## Prerequisites
 
 - Node.js (v16+)
-- A configured CUPS print server on the machine running the client.
+- CUPS printing system (comes pre-installed on macOS, available on Linux and Windows with WSL)
 
 ## Setup
 
@@ -65,21 +103,24 @@ Use the `print` command to send a file to a specific client and printer.
 **Syntax:**
 
 ```
-node print <file_path> <client_id> <printer_name> [cups_options]
+node print <file_path> <client_id> <printer_name> [cups_options] [context]
 ```
 
-**Printer Name Normalization:**
+- `context`: An optional string that can be used to save context when printing (e.g., user ID, order ID). This context can be used to search for print jobs in the Convex dashboard.
 
-Printer names are automatically normalized to CUPS internal format:
-- Spaces and dots are replaced with underscores
-- Names starting with digits get a leading underscore
+### Printer Name Normalization
 
-Examples:
-- `"Brother MFC-L3770CDW series"` → `Brother_MFC_L3770CDW_series`
-- `"192.168.7.101"` → `_192_168_7_101`
-- `"HP LaserJet Pro 4.01"` → `HP_LaserJet_Pro_4_01`
+The print client automatically normalizes printer names to a format that is compatible with CUPS. This normalization is done on the client-side.
 
-You can use either the display name or the normalized name when submitting jobs.
+When submitting a print job, the `printerId` should be the raw, un-normalized printer name, including the protocol if needed.
+
+**Examples:**
+
+- `ipp://192.168.7.101`
+- `socket://10.0.0.5`
+- `Brother MFC-L3770CDW series`
+
+The client will then generate a CUPS-compatible printer name from the host part of the `printerId`. For example, `ipp://192.168.7.101` will be normalized to `_192_168_7_101`.
 
 **Examples:**
 

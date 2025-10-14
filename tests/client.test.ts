@@ -48,7 +48,7 @@ describe("Client Logic", () => {
 
         expect(fetch).toHaveBeenCalledWith("http://fake-url.com/file.pdf");
         expect(exec).toHaveBeenCalledWith(
-            'lp -d "test-printer" -o media=A4',
+            'lp -d "test_printer" -o media=A4',
             expect.any(Function)
         );
         expect(mockBody.pipe).toHaveBeenCalledWith(mockStdin);

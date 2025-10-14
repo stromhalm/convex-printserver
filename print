@@ -8,13 +8,14 @@ import "dotenv/config";
 async function main() {
   const args = process.argv.slice(2);
   if (args.length < 3) {
-    console.log("Usage: node print <file> <clientId> <printerId> [cupsOptions]\n\nSends a print job to a client.\n");
+    console.log("Usage: node print <file> <clientId> <printerId> [cupsOptions] [context]\n\nSends a print job to a client.\n");
     process.exit(1);
   }
   const file = args[0];
   const clientId = args[1];
   const printerId = args[2];
-  const cupsOptionsStr = args.slice(3).join(" ");
+  const cupsOptionsStr = args[3] || "";
+  const context = args[4];
 
   if (typeof file !== 'string' || typeof clientId !== 'string' || typeof printerId !== 'string') {
     console.error('Invalid arguments. Please provide a file, client ID, and printer ID.');
@@ -46,6 +47,9 @@ async function main() {
     form.append("clientId", clientId);
     form.append("printerId", printerId);
     form.append("cupsOptions", cupsOptionsStr);
+    if (context) {
+      form.append("context", context);
+    }
     form.append("file", fs.createReadStream(filePath));
 
     const response = await fetch(printUrl, {

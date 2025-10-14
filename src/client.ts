@@ -9,6 +9,37 @@ import { fileURLToPath } from "url";
 
 let isProcessing = false;
 
+function findDriver(protocol: string, host: string): string | null {
+  const printerIdentifier = `${protocol}://${host}`;
+  for (const key in process.env) {
+    if (key.startsWith("PRINTER_DRIVER_")) {
+      const value = process.env[key]!;
+      const parts = value.split(':');
+      if (parts.length < 2) continue;
+
+      const pattern = parts[0] + ":" + parts[1];
+      const driverPath = parts.slice(2).join(':');
+
+      const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+      if (regex.test(printerIdentifier)) {
+        return driverPath;
+      }
+    }
+  }
+  return null;
+}
+
+
+export function normalizePrinterName(host: string) {
+  // Replace any characters that are not letters, numbers, or underscores with an underscore
+  // Also, ensure the name starts with a letter or underscore
+  const normalized = host.replace(/[^a-zA-Z0-9_]/g, '_');
+  if (!/^[a-zA-Z_]/.test(normalized)) {
+    return `_${normalized}`;
+  }
+  return normalized;
+}
+
 export async function handleJob(job: any, logOnly: boolean) {
     console.log(`\n--- Processing Job [${job._id}] ---`);
     try {
@@ -25,37 +56,89 @@ export async function handleJob(job: any, logOnly: boolean) {
         return;
       }
 
+      const printerId = job.printerId;
+      let protocol = 'ipp';
+      let host = printerId;
+
+      const protocolMatch = printerId.match(/^([a-zA-Z]+):\/\/(.+)/);
+      if (protocolMatch) {
+        protocol = protocolMatch[1];
+        host = protocolMatch[2];
+      }
+
+      const printerName = normalizePrinterName(host);
+
       // Stream file directly to printer via stdin (no temp file needed)
-      let printCommand = `lp -d "${job.printerId}"`;
+      let printCommand = `lp -d "${printerName}"`;
       if (job.cupsOptions) {
         printCommand += ` ${job.cupsOptions}`;
       }
       console.log(`  Executing: ${printCommand}`);
 
-      const response = await fetch(job.fileUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      let retries = 1;
+
+      const attemptPrint = async () => {
+        try {
+          const response = await fetch(job.fileUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+          }
+
+          await new Promise<void>((resolve, reject) => {
+            const child = exec(printCommand, (error, stdout, stderr) => {
+              if (error) {
+                console.error(`Print command failed: ${error.message}`);
+                if (stderr) console.error(`Stderr: ${stderr}`);
+                reject(error);
+                return;
+              }
+              if (stdout) console.log(`Stdout: ${stdout}`);
+              resolve();
+            });
+    
+            // Stream response directly to lp stdin
+            if (child.stdin && response.body) {
+              response.body.pipe(child.stdin);
+            }
+            else {
+              reject(new Error("Failed to pipe file to print command"));
+            }
+          });
+        } catch (error: any) {
+          if (retries > 0 && error.message.includes("lp: No such file or directory")) {
+            retries--;
+            console.log("Printer not found, attempting to register...");
+            let registerCommand = `lpadmin -p ${printerName} -E -v "${protocol}://${host}"`;
+
+            const driverPath = findDriver(protocol, host);
+            if (driverPath) {
+              registerCommand += ` -P "${driverPath}"`;
+            } else if (protocol === 'ipp') {
+              registerCommand += ` -m everywhere`;
+            }
+
+            console.log(`  Executing: ${registerCommand}`);
+            await new Promise<void>((resolve, reject) => {
+              exec(registerCommand, (error, stdout, stderr) => {
+                if (error) {
+                  console.error(`Failed to register printer: ${error.message}`);
+                  if (stderr) console.error(`Stderr: ${stderr}`);
+                  reject(error);
+                  return;
+                }
+                if (stdout) console.log(`Stdout: ${stdout}`);
+                console.log("Printer registered, retrying print job...");
+                resolve();
+              });
+            });
+            await attemptPrint();
+          } else {
+            throw error;
+          }
+        }
       }
 
-      await new Promise<void>((resolve, reject) => {
-        const child = exec(printCommand, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`Print command failed: ${error.message}`);
-            if (stderr) console.error(`Stderr: ${stderr}`);
-            reject(error);
-            return;
-          }
-          if (stdout) console.log(`Stdout: ${stdout}`);
-          resolve();
-        });
-
-        // Stream response directly to lp stdin
-        if (child.stdin && response.body) {
-          response.body.pipe(child.stdin);
-        } else {
-          reject(new Error("Failed to pipe file to print command"));
-        }
-      });
+      await attemptPrint();
 
       console.log(`--- Job [${job._id}] Completed ---`);
 

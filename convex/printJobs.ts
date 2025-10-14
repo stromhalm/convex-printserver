@@ -66,6 +66,7 @@ export const createPrintJob = mutation({
     printerId: v.string(),
     fileStorageId: v.id("_storage"),
     cupsOptions: v.string(),
+    context: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return ctx.db.insert("printJobs", {
