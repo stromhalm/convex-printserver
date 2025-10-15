@@ -1,4 +1,3 @@
-#!/usr/bin/env -S npx tsx
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
