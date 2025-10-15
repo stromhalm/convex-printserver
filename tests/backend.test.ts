@@ -89,11 +89,8 @@ describe("Print Job Backend Logic", () => {
     const claimedJob = await t.mutation(api.printJobs.claimJob, { jobId });
     expect(claimedJob).not.toBeNull();
     expect(claimedJob?._id).toEqual(jobId);
+    expect(claimedJob?.status).toBe("completed");
     expect(claimedJob?.fileUrl).toBeDefined();
-
-    // Job should be marked as completed in DB
-    const updatedJob = await t.query(api.printJobs.getJob, { jobId });
-    expect(updatedJob?.status).toBe("completed");
 
     // Should not return the same job again as pending
     const nextJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });

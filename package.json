@@ -13,7 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "convex": "^1.27.5",
+    "convex": "^1.28.0",
     "dotenv": "^17.2.3",
     "form-data": "^4.0.4",
     "node-fetch": "^2.7.0",

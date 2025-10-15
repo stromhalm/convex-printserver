@@ -14,84 +14,92 @@ describe("Printer Name Normalization", () => {
   test("should normalize printer name with spaces", async () => {
     const t = convexTest(schema);
     
-    const jobId = await t.run(async (ctx) => {
+    const result = await t.run(async (ctx) => {
       // Simulate HTTP endpoint normalization
       const printerId = "Brother MFC-L3770CDW series".replace(/[\s.]/g, '_');
       
-      return await ctx.db.insert("printJobs", {
+      const jobId = await ctx.db.insert("printJobs", {
         clientId: "client1",
         printerId,
         fileStorageId: fakeFileId,
         cupsOptions: "",
         status: "pending",
       });
+      
+      const job = await ctx.db.get(jobId);
+      return job?.printerId;
     });
 
-    const job = await t.query(api.printJobs.getJob, { jobId });
-    expect(job?.printerId).toBe("Brother_MFC-L3770CDW_series");
+    expect(result).toBe("Brother_MFC-L3770CDW_series");
   });
 
   test("should normalize printer name starting with digit", async () => {
     const t = convexTest(schema);
     
-    const jobId = await t.run(async (ctx) => {
+    const result = await t.run(async (ctx) => {
       // Simulate HTTP endpoint normalization
       let printerId = "192.168.7.101".replace(/[\s.]/g, '_');
       if (/^\d/.test(printerId)) {
         printerId = '_' + printerId;
       }
       
-      return await ctx.db.insert("printJobs", {
+      const jobId = await ctx.db.insert("printJobs", {
         clientId: "client1",
         printerId,
         fileStorageId: fakeFileId,
         cupsOptions: "",
         status: "pending",
       });
+      
+      const job = await ctx.db.get(jobId);
+      return job?.printerId;
     });
 
-    const job = await t.query(api.printJobs.getJob, { jobId });
-    expect(job?.printerId).toBe("_192_168_7_101");
+    expect(result).toBe("_192_168_7_101");
   });
 
   test("should normalize printer name with dots and spaces", async () => {
     const t = convexTest(schema);
     
-    const jobId = await t.run(async (ctx) => {
+    const result = await t.run(async (ctx) => {
       // Simulate HTTP endpoint normalization
       const printerId = "HP LaserJet Pro 4.01".replace(/[\s.]/g, '_');
       
-      return await ctx.db.insert("printJobs", {
+      const jobId = await ctx.db.insert("printJobs", {
         clientId: "client1",
         printerId,
         fileStorageId: fakeFileId,
         cupsOptions: "",
         status: "pending",
       });
+      
+      const job = await ctx.db.get(jobId);
+      return job?.printerId;
     });
 
-    const job = await t.query(api.printJobs.getJob, { jobId });
-    expect(job?.printerId).toBe("HP_LaserJet_Pro_4_01");
+    expect(result).toBe("HP_LaserJet_Pro_4_01");
   });
 
   test("should not modify already normalized printer names", async () => {
     const t = convexTest(schema);
     
-    const jobId = await t.run(async (ctx) => {
+    const result = await t.run(async (ctx) => {
       // Already normalized name
       const printerId = "My_Printer_Name".replace(/[\s.]/g, '_');
       
-      return await ctx.db.insert("printJobs", {
+      const jobId = await ctx.db.insert("printJobs", {
         clientId: "client1",
         printerId,
         fileStorageId: fakeFileId,
         cupsOptions: "",
         status: "pending",
       });
+      
+      const job = await ctx.db.get(jobId);
+      return job?.printerId;
     });
 
-    const job = await t.query(api.printJobs.getJob, { jobId });
-    expect(job?.printerId).toBe("My_Printer_Name");
+    expect(result).toBe("My_Printer_Name");
   });
 });
 

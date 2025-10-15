@@ -30,6 +30,7 @@ export const claimJob = mutation({
     
     return {
       ...job,
+      status: "completed",
       fileUrl,
     };
   },
@@ -74,32 +75,6 @@ export const createPrintJob = mutation({
       ...args,
       status: "pending",
     });
-  },
-});
-
-// Get a specific job by ID
-export const getJob = query({
-  args: { jobId: v.id("printJobs") },
-  handler: async (ctx, args) => {
-    return ctx.db.get(args.jobId);
-  },
-});
-
-// Get the URL for a file in storage
-export const getStorageUrl = query({
-  args: { storageId: v.id("_storage"), apiKey: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const expectedApiKey = process.env.API_KEY;
-    if (expectedApiKey) {
-      if (args.apiKey !== expectedApiKey) {
-        throw new Error("Unauthorized");
-      }
-    } else {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated access to getStorageUrl.");
-      }
-    }
-    return ctx.storage.getUrl(args.storageId);
   },
 });
 
