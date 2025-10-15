@@ -51,8 +51,9 @@ export const getOldestPendingJob = query({
     }
     return ctx.db
       .query("printJobs")
-      .withIndex("by_clientId", (q) => q.eq("clientId", args.clientId))
-      .filter((q) => q.eq(q.field("status"), "pending"))
+      .withIndex("by_clientId_status", (q) => 
+        q.eq("clientId", args.clientId).eq("status", "pending")
+      )
       .order("asc")
       .first();
   },

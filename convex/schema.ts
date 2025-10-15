@@ -10,7 +10,9 @@ export default defineSchema({
     cupsOptions: v.string(),
     status: v.string(), // "pending", "completed"
     context: v.optional(v.string()),
-  }).index("by_clientId", ["clientId"]).searchIndex("by_context", {
-    searchField: "context",
-  }),
+  })
+    .index("by_clientId_status", ["clientId", "status"])
+    .searchIndex("by_context", {
+      searchField: "context",
+    }),
 });
