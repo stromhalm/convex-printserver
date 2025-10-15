@@ -1,7 +1,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { convexTest } from "convex-test";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
@@ -23,7 +23,7 @@ describe("Print Job Backend Logic", () => {
 
   test("should create a print job", async () => {
     const t = convexTest(schema);
-    await t.mutation(api.printJobs.createPrintJob, {
+    await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,
@@ -45,14 +45,14 @@ describe("Print Job Backend Logic", () => {
   test("getOldestPendingJob should return the oldest job", async () => {
     const t = convexTest(schema);
 
-    const job1Id = await t.mutation(api.printJobs.createPrintJob, {
+    const job1Id = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,
       cupsOptions: "",
     });
 
-    await t.mutation(api.printJobs.createPrintJob, {
+    await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer2",
       fileStorageId: fakeFileId,
@@ -66,7 +66,7 @@ describe("Print Job Backend Logic", () => {
 
   test("getOldestPendingJob should not return jobs for other clients", async () => {
     const t = convexTest(schema);
-    await t.mutation(api.printJobs.createPrintJob, {
+    await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client2",
       printerId: "printer1",
       fileStorageId: fakeFileId,
@@ -79,7 +79,7 @@ describe("Print Job Backend Logic", () => {
 
   test("claimJob should mark job as completed and return with URL", async () => {
     const t = convexTest(schema);
-    const jobId = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,
@@ -101,21 +101,21 @@ describe("Print Job Backend Logic", () => {
     const t = convexTest(schema);
     
     // Create 3 jobs
-    const jobId1 = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId1 = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,
       cupsOptions: "",
     });
 
-    const jobId2 = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId2 = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,
       cupsOptions: "",
     });
 
-    const jobId3 = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId3 = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "client1",
       printerId: "printer1",
       fileStorageId: fakeFileId,

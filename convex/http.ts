@@ -1,8 +1,8 @@
 
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server.js";
-import { api } from "./_generated/api.js";
-
+import { internal } from "./_generated/api.js";
+import { validateApiKey } from "./printJobs.js";
 
 const http = httpRouter();
 
@@ -10,16 +10,12 @@ http.route({
   path: "/print",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const apiKey = process.env.API_KEY;
-    if (apiKey) {
-      const providedApiKey = request.headers.get("x-api-key");
-      if (providedApiKey !== apiKey) {
-        return new Response("Unauthorized", { status: 401 });
-      }
-    } else {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated HTTP /print requests.");
-      }
+    const providedApiKey = request.headers.get("x-api-key") ?? undefined;
+    
+    try {
+      validateApiKey(providedApiKey);
+    } catch (error) {
+      return new Response("Unauthorized", { status: 401 });
     }
 
     const formData = await request.formData();
@@ -48,7 +44,7 @@ http.route({
       mutationArgs.context = context;
     }
 
-    await ctx.runMutation(api.printJobs.createPrintJob, mutationArgs);
+    await ctx.runMutation(internal.printJobs.createPrintJob, mutationArgs);
 
     return new Response("Print job created");
   }),

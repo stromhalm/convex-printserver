@@ -6,7 +6,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.js";
 
 // Helper function to validate API key
-function validateApiKey(providedApiKey: string | undefined) {
+export function validateApiKey(providedApiKey: string | undefined) {
   const expectedApiKey = process.env.API_KEY;
   if (expectedApiKey) {
     if (providedApiKey !== expectedApiKey) {
@@ -56,8 +56,8 @@ export const getOldestPendingJob = query({
 });
 
 
-// Create a new print job
-export const createPrintJob = mutation({
+// Create a new print job (internal only - called from HTTP action)
+export const createPrintJob = internalMutation({
   args: {
     clientId: v.string(),
     printerId: v.string(),

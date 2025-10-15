@@ -1,13 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { convexTest } from "convex-test";
-import { api } from "../convex/_generated/api.js";
+import { api, internal } from "../convex/_generated/api.js";
 import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 describe("API Key Enforcement", () => {
   const fakeFileId = "12345;_storage" as Id<"_storage">;
-
-  
 
   let prevApiKey: string | undefined;
   beforeEach(() => {
@@ -29,7 +27,7 @@ describe("API Key Enforcement", () => {
       t.query(api.printJobs.getOldestPendingJob, { clientId: "c1", apiKey: "wrong" })
     ).rejects.toThrowError(/Unauthorized/);
 
-    const jobId = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "c1",
       printerId: "p1",
       fileStorageId: fakeFileId,
@@ -44,7 +42,7 @@ describe("API Key Enforcement", () => {
   test("queries/mutations succeed when API_KEY is set and correct key provided", async () => {
     const t = convexTest(schema);
 
-    const jobId = await t.mutation(api.printJobs.createPrintJob, {
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
       clientId: "c1",
       printerId: "p1",
       fileStorageId: fakeFileId,
