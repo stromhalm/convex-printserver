@@ -138,7 +138,7 @@ export const printAction = httpAction(async (ctx, request) => {
   const formData = await request.formData();
   const file = formData.get("file");
   const clientId = formData.get("clientId") as string;
-  const printerIdRaw = formData.get("printerId") as string;
+  const printerId = formData.get("printerId") as string;
   const cupsOptions = formData.get("cupsOptions") as string;
   const context = formData.get("context") as string;
 
@@ -146,22 +146,15 @@ export const printAction = httpAction(async (ctx, request) => {
     return new Response("No file uploaded", { status: 400 });
   }
 
-  const printerId = printerIdRaw;
-
   const fileStorageId = await ctx.storage.store(file);
 
-  const mutationArgs: any = {
+  await ctx.runMutation(internal.printJobs.createPrintJob, {
     clientId,
     printerId,
     fileStorageId,
     cupsOptions,
-  };
-
-  if (context) {
-    mutationArgs.context = context;
-  }
-
-  await ctx.runMutation(internal.printJobs.createPrintJob, mutationArgs);
+    ...(context && { context }),
+  });
 
   return new Response("Print job created");
 });
