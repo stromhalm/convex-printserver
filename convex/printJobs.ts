@@ -5,20 +5,25 @@ import { internal } from "./_generated/api.js";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.js";
 
+// Helper function to validate API key
+function validateApiKey(providedApiKey: string | undefined) {
+  const expectedApiKey = process.env.API_KEY;
+  if (expectedApiKey) {
+    if (providedApiKey !== expectedApiKey) {
+      throw new Error("Unauthorized");
+    }
+  } else {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn(`Warning: API_KEY not set; allowing unauthenticated access.`);
+    }
+  }
+}
+
 // Atomically claim a job for a client and return it with file URL
 export const claimJob = mutation({
   args: { jobId: v.id("printJobs"), apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const expectedApiKey = process.env.API_KEY;
-    if (expectedApiKey) {
-      if (args.apiKey !== expectedApiKey) {
-        throw new Error("Unauthorized");
-      }
-    } else {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated access to claimJob.");
-      }
-    }
+    validateApiKey(args.apiKey);
     
     const job = await ctx.db.get(args.jobId);
     
@@ -30,11 +35,7 @@ export const claimJob = mutation({
       ctx.storage.getUrl(job.fileStorageId),
     ]);
     
-    return {
-      ...job,
-      status: "completed",
-      fileUrl,
-    };
+    return { ...job, status: "completed", fileUrl };
   },
 });
 
@@ -42,16 +43,8 @@ export const claimJob = mutation({
 export const getOldestPendingJob = query({
   args: { clientId: v.string(), apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const expectedApiKey = process.env.API_KEY;
-    if (expectedApiKey) {
-      if (args.apiKey !== expectedApiKey) {
-        throw new Error("Unauthorized");
-      }
-    } else {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("Warning: API_KEY not set; allowing unauthenticated access to getOldestPendingJob.");
-      }
-    }
+    validateApiKey(args.apiKey);
+    
     return ctx.db
       .query("printJobs")
       .withIndex("by_clientId_status", (q) => 
@@ -73,10 +66,7 @@ export const createPrintJob = mutation({
     context: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("printJobs", {
-      ...args,
-      status: "pending",
-    });
+    return ctx.db.insert("printJobs", { ...args, status: "pending" });
   },
 });
 
