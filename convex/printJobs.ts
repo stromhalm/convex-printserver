@@ -54,7 +54,6 @@ export const getOldestPendingJob = query({
   },
 });
 
-
 // Create a new print job (internal only - called from HTTP action)
 export const createPrintJob = internalMutation({
   args: {
