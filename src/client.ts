@@ -104,6 +104,22 @@ export async function handleJob(job: any, logOnly: boolean) {
     
             // Stream response directly to lp stdin
             if (child.stdin && response.body) {
+              // Handle pipe errors to prevent unhandled EPIPE errors
+              response.body.on('error', (err) => {
+                console.error(`Stream error while piping to print command: ${err.message}`);
+                reject(err);
+              });
+              
+              child.stdin.on('error', (err) => {
+                // Ignore EPIPE errors on stdin - they occur when lp closes early
+                if (err.message.includes('EPIPE')) {
+                  console.warn(`Print command closed stdin early (this may be normal): ${err.message}`);
+                } else {
+                  console.error(`Stdin error: ${err.message}`);
+                  reject(err);
+                }
+              });
+              
               response.body.pipe(child.stdin);
             }
             else {

@@ -32,13 +32,16 @@ describe("Client Logic", () => {
     test("handleJob should process a print job in normal mode", async () => {
         const mockBody = {
             pipe: vi.fn(),
+            on: vi.fn().mockReturnThis(),
         };
         vi.mocked(fetch).mockResolvedValue({
             ok: true,
             body: mockBody,
         } as any);
         
-        const mockStdin = {};
+        const mockStdin = {
+            on: vi.fn().mockReturnThis(),
+        };
         vi.mocked(exec).mockImplementation((_cmd, cb) => {
             (cb as any)(null, "stdout", "");
             return { stdin: mockStdin } as any;
@@ -51,6 +54,8 @@ describe("Client Logic", () => {
             'lp -d "test_printer" -o media=A4',
             expect.any(Function)
         );
+        expect(mockBody.on).toHaveBeenCalledWith('error', expect.any(Function));
+        expect(mockStdin.on).toHaveBeenCalledWith('error', expect.any(Function));
         expect(mockBody.pipe).toHaveBeenCalledWith(mockStdin);
         expect(mockClient.mutation).not.toHaveBeenCalled();
     });
@@ -65,14 +70,17 @@ describe("Client Logic", () => {
 
     test("handleJob should handle print command failure", async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        const mockBody = { pipe: vi.fn() };
+        const mockBody = { 
+            pipe: vi.fn(),
+            on: vi.fn().mockReturnThis(),
+        };
         vi.mocked(fetch).mockResolvedValue({
             ok: true,
             body: mockBody,
         } as any);
         vi.mocked(exec).mockImplementation((_cmd, cb) => {
             (cb as any)(new Error("Printer on fire"));
-            return { stdin: {} } as any;
+            return { stdin: { on: vi.fn().mockReturnThis() } } as any;
         });
 
         await handleJob(fakeJob, false);
