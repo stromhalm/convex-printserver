@@ -1,5 +1,7 @@
 
-import { query, mutation } from "./_generated/server.js";
+import { query, mutation, internalMutation } from "./_generated/server.js";
+import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api.js";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.js";
 
@@ -79,7 +81,7 @@ export const createPrintJob = mutation({
 });
 
 // Clean up old jobs and files
-export const cleanupOldData = mutation({
+export const cleanupOldData = internalMutation({
   args: {},
   handler: async (ctx) => {
     const maxAgeDays = parseInt(process.env.CLEANUP_MAX_AGE_DAYS || "30");
@@ -133,3 +135,14 @@ export const cleanupOldData = mutation({
     };
   },
 });
+
+// Cron jobs
+const crons = cronJobs();
+
+crons.cron(
+  "cleanup old data",
+  "0 2 * * *", // Daily at 2:00 AM UTC
+  internal.printJobs.cleanupOldData,
+);
+
+export default crons;
