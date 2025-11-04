@@ -81,15 +81,17 @@ export const cleanupOldData = internalMutation({
 
     console.log(`Cleaning up data older than ${maxAgeDays} days (${new Date(cutoffTime).toISOString()})`);
 
-    // Get a batch of old jobs
-    // We query all jobs and filter by creation time, then take a batch
-    // This is efficient because we use .take() to limit document reads per transaction
-    const oldJobs = await ctx.db
+    // Get oldest jobs using the index (which includes _creationTime)
+    // Query in ascending order by creation time
+    const jobs = await ctx.db
       .query("printJobs")
-      .filter((q) => q.lt(q.field("_creationTime"), cutoffTime))
+      .order("asc")
       .take(BATCH_SIZE);
 
-    console.log(`Found ${oldJobs.length} old jobs in this batch`);
+    // Filter to only include jobs older than cutoff
+    const oldJobs = jobs.filter(job => job._creationTime < cutoffTime);
+
+    console.log(`Found ${oldJobs.length} old jobs in this batch (checked ${jobs.length} total)`);
 
     if (oldJobs.length === 0) {
       console.log("No old jobs to clean up");
@@ -132,11 +134,11 @@ export const cleanupOldData = internalMutation({
 
     console.log(`Deleted ${deletedFilesCount} unreferenced storage files`);
 
-    // Check if there are more jobs to clean up
-    const hasMore = oldJobs.length === BATCH_SIZE;
+    // Continue if we deleted any jobs (there might be more old ones)
+    const hasMore = oldJobs.length > 0;
     
     if (hasMore) {
-      console.log("More jobs to clean up, scheduling next batch...");
+      console.log("Scheduling next cleanup batch...");
       // Schedule the next batch to run immediately
       await ctx.scheduler.runAfter(0, internal.printJobs.cleanupOldData, {});
     }
