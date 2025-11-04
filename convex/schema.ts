@@ -12,6 +12,7 @@ export default defineSchema({
     context: v.optional(v.string()),
   })
     .index("by_clientId_status", ["clientId", "status"])
+    .index("by_status", ["status"])
     .searchIndex("by_context", {
       searchField: "context",
     }),

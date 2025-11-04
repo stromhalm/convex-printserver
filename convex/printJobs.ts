@@ -68,43 +68,59 @@ export const createPrintJob = internalMutation({
   },
 });
 
-// Clean up old jobs and files
+// Clean up old jobs and files (processes in batches to avoid document read limits)
 export const cleanupOldData = internalMutation({
   args: {},
   handler: async (ctx) => {
     const maxAgeDays = parseInt(process.env.CLEANUP_MAX_AGE_DAYS || "30");
     const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000; // Convert days to milliseconds
     const cutoffTime = Date.now() - maxAgeMs;
+    
+    // Process in batches to stay well under the 32k document read limit
+    const BATCH_SIZE = 1000;
 
     console.log(`Cleaning up data older than ${maxAgeDays} days (${new Date(cutoffTime).toISOString()})`);
 
-    // Get all old jobs
+    // Get a batch of old jobs
+    // We query all jobs and filter by creation time, then take a batch
+    // This is efficient because we use .take() to limit document reads per transaction
     const oldJobs = await ctx.db
       .query("printJobs")
       .filter((q) => q.lt(q.field("_creationTime"), cutoffTime))
-      .collect();
+      .take(BATCH_SIZE);
 
-    console.log(`Found ${oldJobs.length} old jobs to delete`);
+    console.log(`Found ${oldJobs.length} old jobs in this batch`);
 
-    // Collect storage IDs that are no longer referenced
-    const storageIdsToDelete = new Set<Id<"_storage">>();
+    if (oldJobs.length === 0) {
+      console.log("No old jobs to clean up");
+      return {
+        deletedJobs: 0,
+        deletedFiles: 0,
+        cutoffTime: new Date(cutoffTime).toISOString(),
+        hasMore: false,
+      };
+    }
+
+    // Collect storage IDs that might need deletion
+    const storageIdsToCheck = new Set<Id<"_storage">>();
 
     // Delete old jobs and collect their storage IDs
     for (const job of oldJobs) {
-      storageIdsToDelete.add(job.fileStorageId);
+      storageIdsToCheck.add(job.fileStorageId);
       await ctx.db.delete(job._id);
     }
 
     console.log(`Deleted ${oldJobs.length} old jobs`);
 
-    // Check which storage IDs are still referenced by remaining jobs
-    const remainingJobs = await ctx.db.query("printJobs").collect();
-    const referencedStorageIds = new Set<Id<"_storage">>(remainingJobs.map(job => job.fileStorageId));
-
-    // Delete storage files that are no longer referenced
+    // For each storage ID, check if it's still referenced by any job
     let deletedFilesCount = 0;
-    for (const storageId of storageIdsToDelete) {
-      if (!referencedStorageIds.has(storageId)) {
+    for (const storageId of storageIdsToCheck) {
+      const stillReferenced = await ctx.db
+        .query("printJobs")
+        .filter((q) => q.eq(q.field("fileStorageId"), storageId))
+        .first();
+      
+      if (!stillReferenced) {
         try {
           await ctx.storage.delete(storageId);
           deletedFilesCount++;
@@ -116,10 +132,20 @@ export const cleanupOldData = internalMutation({
 
     console.log(`Deleted ${deletedFilesCount} unreferenced storage files`);
 
+    // Check if there are more jobs to clean up
+    const hasMore = oldJobs.length === BATCH_SIZE;
+    
+    if (hasMore) {
+      console.log("More jobs to clean up, scheduling next batch...");
+      // Schedule the next batch to run immediately
+      await ctx.scheduler.runAfter(0, internal.printJobs.cleanupOldData, {});
+    }
+
     return {
       deletedJobs: oldJobs.length,
       deletedFiles: deletedFilesCount,
       cutoffTime: new Date(cutoffTime).toISOString(),
+      hasMore,
     };
   },
 });
