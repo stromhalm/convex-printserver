@@ -77,7 +77,7 @@ export const cleanupOldData = internalMutation({
     const cutoffTime = Date.now() - maxAgeMs;
     
     // Process in batches to stay well under the 32k document read limit
-    const BATCH_SIZE = 1000;
+    const BATCH_SIZE = 500;
 
     console.log(`Cleaning up data older than ${maxAgeDays} days (${new Date(cutoffTime).toISOString()})`);
 
@@ -114,12 +114,12 @@ export const cleanupOldData = internalMutation({
 
     console.log(`Deleted ${oldJobs.length} old jobs`);
 
-    // For each storage ID, check if it's still referenced by any job
+    // For each storage ID, check if it's still referenced by any job using the index
     let deletedFilesCount = 0;
     for (const storageId of storageIdsToCheck) {
       const stillReferenced = await ctx.db
         .query("printJobs")
-        .filter((q) => q.eq(q.field("fileStorageId"), storageId))
+        .withIndex("by_fileStorageId", (q) => q.eq("fileStorageId", storageId))
         .first();
       
       if (!stillReferenced) {
