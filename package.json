@@ -13,11 +13,11 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "convex": "^1.32.0",
-    "dotenv": "^17.2.3",
-    "form-data": "^4.0.4",
+    "convex": "^1.39.1",
+    "dotenv": "^17.4.2",
+    "form-data": "^4.0.5",
     "node-fetch": "^2.7.0",
-    "tsx": "^4.20.6",
+    "tsx": "^4.22.3",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
