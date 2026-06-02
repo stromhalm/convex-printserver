@@ -41,7 +41,8 @@ export function normalizePrinterName(host: string) {
 }
 
 export async function handleJob(job: any, logOnly: boolean) {
-    console.log(`\n--- Processing Job [${job._id}] ---`);
+    const receivedAt = new Date().toISOString();
+    console.log(`\n--- Processing Job [${job._id}] (received ${receivedAt}) ---`);
     try {
       if (!job.fileUrl) {
         throw new Error(`No file URL provided for job ${job._id}`);
