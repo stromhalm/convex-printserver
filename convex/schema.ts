@@ -8,8 +8,10 @@ export default defineSchema({
     printerId: v.string(),
     fileStorageId: v.id("_storage"),
     cupsOptions: v.string(),
-    status: v.string(), // "pending", "completed"
+    status: v.string(), // "pending", "printing", "completed", "failed"
     context: v.optional(v.string()),
+    attempts: v.optional(v.number()),
+    lastError: v.optional(v.string()),
   })
     .index("by_clientId_status", ["clientId", "status"])
     .index("by_fileStorageId", ["fileStorageId"])

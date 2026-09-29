@@ -97,6 +97,84 @@ describe("Print Job Backend Logic", () => {
     expect(nextJob).toBeNull();
   });
 
+  test("claimJob should not claim a job that is no longer pending", async () => {
+    const t = convexTest(schema);
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    expect(await t.mutation(api.printJobs.claimJob, { jobId, reportsResult: true })).not.toBeNull();
+    expect(await t.mutation(api.printJobs.claimJob, { jobId, reportsResult: true })).toBeNull();
+  });
+
+  test("claimJob with reportsResult keeps job printing until completed", async () => {
+    const t = convexTest(schema);
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    const claimedJob = await t.mutation(api.printJobs.claimJob, { jobId, reportsResult: true });
+    expect(claimedJob?.status).toBe("printing");
+    expect(claimedJob?.attempts).toBe(1);
+
+    await t.mutation(api.printJobs.completeJob, { jobId });
+    const job = await t.run((ctx) => ctx.db.get(jobId));
+    expect(job?.status).toBe("completed");
+  });
+
+  test("failJob should requeue a job until max attempts are reached", async () => {
+    const t = convexTest(schema);
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const claimedJob = await t.mutation(api.printJobs.claimJob, { jobId, reportsResult: true });
+      expect(claimedJob?.attempts).toBe(attempt);
+      await t.mutation(api.printJobs.failJob, { jobId, error: "timeout" });
+    }
+
+    const job = await t.run((ctx) => ctx.db.get(jobId));
+    expect(job?.status).toBe("failed");
+    expect(job?.lastError).toBe("timeout");
+    expect(await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" })).toBeNull();
+  });
+
+  test("releaseClaimedJobs should requeue interrupted jobs of the client", async () => {
+    const t = convexTest(schema);
+    const jobId = await t.mutation(internal.printJobs.createPrintJob, {
+      clientId: "client1",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+    const otherJobId = await t.mutation(internal.printJobs.createPrintJob, {
+      clientId: "client2",
+      printerId: "printer1",
+      fileStorageId: fakeFileId,
+      cupsOptions: "",
+    });
+    await t.mutation(api.printJobs.claimJob, { jobId, reportsResult: true });
+    await t.mutation(api.printJobs.claimJob, { jobId: otherJobId, reportsResult: true });
+
+    const released = await t.mutation(api.printJobs.releaseClaimedJobs, { clientId: "client1" });
+    expect(released).toBe(1);
+
+    const pendingJob = await t.query(api.printJobs.getOldestPendingJob, { clientId: "client1" });
+    expect(pendingJob?._id).toEqual(jobId);
+    const otherJob = await t.run((ctx) => ctx.db.get(otherJobId));
+    expect(otherJob?.status).toBe("printing");
+  });
+
   test("should process multiple pending jobs in order", async () => {
     const t = convexTest(schema);
     

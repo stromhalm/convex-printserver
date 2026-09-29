@@ -126,6 +126,14 @@ PRINTER_DRIVER_2="ipp://192.168.1.100:drivers/MySpecificDriver.ppd"
 
 If no custom driver is found for a printer, the client will use the `-m everywhere` option for `ipp` printers, and no driver option for other protocols.
 
+### Reliable Job Processing
+
+Each job goes through the states `pending` → `printing` → `completed`. A job is only marked as `completed` after the print command has succeeded.
+
+- The file download times out after 30 seconds and the print command after 60 seconds, so a network glitch can't block the job queue.
+- Failed jobs are put back to `pending` and retried up to 3 times. After that they are marked as `failed`, and the last error is stored in `lastError`.
+- Jobs still in `printing` state when the client starts (e.g. after a crash) are requeued automatically.
+
 ### Printer Name Normalization
 
 The print client automatically normalizes printer names to a format that is compatible with CUPS. This normalization is done on the client-side.

@@ -18,23 +18,86 @@ function validateApiKey(providedApiKey: string | undefined) {
   }
 }
 
-// Atomically claim a job for a client and return it with file URL
+// Number of print attempts before a job is marked as "failed"
+const MAX_ATTEMPTS = 3;
+
+function statusAfterFailure(attempts: number | undefined) {
+  return (attempts ?? 1) >= MAX_ATTEMPTS ? "failed" : "pending";
+}
+
+// Atomically claim a pending job for printing and return it with file URL.
+// Clients passing reportsResult must report the outcome via completeJob or failJob.
+// Legacy clients (without reportsResult) get the job marked as completed right away.
 export const claimJob = mutation({
-  args: { jobId: v.id("printJobs"), apiKey: v.optional(v.string()) },
+  args: {
+    jobId: v.id("printJobs"),
+    apiKey: v.optional(v.string()),
+    reportsResult: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     validateApiKey(args.apiKey);
     
     const job = await ctx.db.get(args.jobId);
     
-    if (!job) return null;
+    // Only pending jobs can be claimed (prevents double printing of stale job IDs)
+    if (!job || job.status !== "pending") return null;
     
-    // Atomically mark as completed and get file URL in parallel
+    const status = args.reportsResult ? "printing" : "completed";
+    const attempts = (job.attempts ?? 0) + 1;
     const [, fileUrl] = await Promise.all([
-      ctx.db.patch(job._id, { status: "completed" }),
+      ctx.db.patch(job._id, { status, attempts }),
       ctx.storage.getUrl(job.fileStorageId),
     ]);
     
-    return { ...job, status: "completed", fileUrl };
+    return { ...job, status, attempts, fileUrl };
+  },
+});
+
+// Mark a claimed job as successfully printed
+export const completeJob = mutation({
+  args: { jobId: v.id("printJobs"), apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    validateApiKey(args.apiKey);
+
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "printing") return;
+
+    await ctx.db.patch(job._id, { status: "completed" });
+  },
+});
+
+// Report a failed print attempt: requeue the job or give up after MAX_ATTEMPTS
+export const failJob = mutation({
+  args: { jobId: v.id("printJobs"), error: v.string(), apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    validateApiKey(args.apiKey);
+
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "printing") return;
+
+    await ctx.db.patch(job._id, { status: statusAfterFailure(job.attempts), lastError: args.error });
+  },
+});
+
+// Requeue jobs left in "printing" state by a client that was terminated mid-job.
+// Called by the client on startup, when it cannot have any jobs in progress.
+export const releaseClaimedJobs = mutation({
+  args: { clientId: v.string(), apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    validateApiKey(args.apiKey);
+
+    const jobs = await ctx.db
+      .query("printJobs")
+      .withIndex("by_clientId_status", (q) =>
+        q.eq("clientId", args.clientId).eq("status", "printing")
+      )
+      .take(100);
+
+    for (const job of jobs) {
+      await ctx.db.patch(job._id, { status: statusAfterFailure(job.attempts) });
+    }
+
+    return jobs.length;
   },
 });
 

@@ -40,9 +40,57 @@ export function normalizePrinterName(host: string) {
   return normalized;
 }
 
+// Timeouts prevent a stalled download or print command from blocking the job queue
+const DOWNLOAD_TIMEOUT_MS = 30_000;
+const COMMAND_TIMEOUT_MS = 60_000;
+// Pause after a failed job before the next attempt (e.g. to ride out network glitches)
+const RETRY_DELAY_MS = 5_000;
+
+function runCommand(command: string, input?: Buffer) {
+  return new Promise<void>((resolve, reject) => {
+    const child = exec(command, { timeout: COMMAND_TIMEOUT_MS }, (error, stdout, stderr) => {
+      if (error) {
+        const reason = error.killed ? `timed out after ${COMMAND_TIMEOUT_MS}ms` : error.message;
+        console.error(`Command failed: ${reason}`);
+        if (stderr) console.error(`Stderr: ${stderr}`);
+        reject(error.killed ? new Error(`Command ${reason}: ${command}`) : error);
+        return;
+      }
+      if (stdout) console.log(`Stdout: ${stdout}`);
+      resolve();
+    });
+
+    if (input === undefined) return;
+    if (!child.stdin) {
+      reject(new Error("Failed to pipe file to print command"));
+      return;
+    }
+    child.stdin.on('error', (err) => {
+      // Ignore EPIPE errors on stdin - they occur when lp closes early
+      if (err.message.includes('EPIPE')) {
+        console.warn(`Print command closed stdin early (this may be normal): ${err.message}`);
+      } else {
+        console.error(`Stdin error: ${err.message}`);
+        reject(err);
+      }
+    });
+    child.stdin.end(input);
+  });
+}
+
+async function downloadFile(url: string) {
+  // The signal also aborts a stalled body download, not just the initial request
+  const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+  }
+  return response.buffer();
+}
+
+// Prints a job and throws if it could not be printed
 export async function handleJob(job: any, logOnly: boolean) {
     const receivedAt = new Date().toISOString();
-    console.log(`\n--- Processing Job [${job._id}] (received ${receivedAt}) ---`);
+    console.log(`\n--- Processing Job [${job._id}] (received ${receivedAt}, attempt ${job.attempts ?? 1}) ---`);
     try {
       if (!job.fileUrl) {
         throw new Error(`No file URL provided for job ${job._id}`);
@@ -75,99 +123,44 @@ export async function handleJob(job: any, logOnly: boolean) {
 
       const printerName = normalizePrinterName(host);
 
-      // Stream file directly to printer via stdin (no temp file needed)
+      // Download completely before printing, so a stalled download never leaves lp waiting for input
+      const file = await downloadFile(job.fileUrl);
+
       let printCommand = `lp -d "${printerName}"`;
       if (job.cupsOptions) {
         printCommand += ` ${job.cupsOptions}`;
       }
       console.log(`  Executing: ${printCommand}`);
 
-      let retries = 1;
-
-      const attemptPrint = async () => {
-        try {
-          const response = await fetch(job.fileUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
-          }
-
-          await new Promise<void>((resolve, reject) => {
-            const child = exec(printCommand, (error, stdout, stderr) => {
-              if (error) {
-                console.error(`Print command failed: ${error.message}`);
-                if (stderr) console.error(`Stderr: ${stderr}`);
-                reject(error);
-                return;
-              }
-              if (stdout) console.log(`Stdout: ${stdout}`);
-              resolve();
-            });
-    
-            // Stream response directly to lp stdin
-            if (child.stdin && response.body) {
-              // Handle pipe errors to prevent unhandled EPIPE errors
-              response.body.on('error', (err) => {
-                console.error(`Stream error while piping to print command: ${err.message}`);
-                reject(err);
-              });
-              
-              child.stdin.on('error', (err) => {
-                // Ignore EPIPE errors on stdin - they occur when lp closes early
-                if (err.message.includes('EPIPE')) {
-                  console.warn(`Print command closed stdin early (this may be normal): ${err.message}`);
-                } else {
-                  console.error(`Stdin error: ${err.message}`);
-                  reject(err);
-                }
-              });
-              
-              response.body.pipe(child.stdin);
-            }
-            else {
-              reject(new Error("Failed to pipe file to print command"));
-            }
-          });
-        } catch (error: any) {
-          if (retries > 0 && error.message.includes("lp: No such file or directory")) {
-            retries--;
-            console.log("Printer not found, attempting to register...");
-            let registerCommand = `lpadmin -p ${printerName} -E -v "${protocol}://${host}"`;
-
-            const driverPath = findDriver(protocol, host);
-            if (driverPath) {
-              registerCommand += ` -P "${driverPath}"`;
-            } else if (protocol === 'ipp') {
-              registerCommand += ` -m everywhere`;
-            }
-
-            console.log(`  Executing: ${registerCommand}`);
-            await new Promise<void>((resolve, reject) => {
-              exec(registerCommand, (error, stdout, stderr) => {
-                if (error) {
-                  console.error(`Failed to register printer: ${error.message}`);
-                  if (stderr) console.error(`Stderr: ${stderr}`);
-                  reject(error);
-                  return;
-                }
-                if (stdout) console.log(`Stdout: ${stdout}`);
-                console.log("Printer registered, retrying print job...");
-                resolve();
-              });
-            });
-            await attemptPrint();
-          } else {
-            throw error;
-          }
+      try {
+        await runCommand(printCommand, file);
+      } catch (error: any) {
+        if (!error.message.includes("lp: No such file or directory")) {
+          throw error;
         }
-      }
 
-      await attemptPrint();
+        console.log("Printer not found, attempting to register...");
+        let registerCommand = `lpadmin -p ${printerName} -E -v "${protocol}://${host}"`;
+
+        const driverPath = findDriver(protocol, host);
+        if (driverPath) {
+          registerCommand += ` -P "${driverPath}"`;
+        } else if (protocol === 'ipp') {
+          registerCommand += ` -m everywhere`;
+        }
+
+        console.log(`  Executing: ${registerCommand}`);
+        await runCommand(registerCommand);
+        console.log("Printer registered, retrying print job...");
+        await runCommand(printCommand, file);
+      }
 
       console.log(`--- Job [${job._id}] Completed ---`);
 
     } catch (error: any) {
       console.error(`Failed to process job ${job._id}:`, error);
       console.log(`--- Job [${job._id}] Failed ---`);
+      throw error;
     }
   }
 
@@ -209,41 +202,76 @@ export async function main() {
     console.log("Operating in log-only mode. Jobs will not be printed.");
   }
 
-  // Unified job processing function
+  const apiKey = process.env.API_KEY;
+
+  // Claim a job, print it and report the result back to Convex
   async function processJob(jobId: any) {
+    const job = await client.mutation(api.printJobs.claimJob, { jobId, apiKey, reportsResult: true });
+    if (!job) return; // Already claimed or no longer pending
+
+    try {
+      await handleJob(job, logOnly);
+    } catch (error: any) {
+      await client.mutation(api.printJobs.failJob, {
+        jobId: job._id,
+        error: String(error?.message ?? error),
+        apiKey,
+      });
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      return;
+    }
+    await client.mutation(api.printJobs.completeJob, { jobId: job._id, apiKey });
+  }
+
+  // Work through all pending jobs, one at a time
+  async function processPendingJobs(firstJobId: any) {
     if (isProcessing) return;
-    
+
     isProcessing = true;
     try {
-      // Atomically claim the job (marks as completed and returns with file URL)
-      const job = await client.mutation(api.printJobs.claimJob, { 
-        jobId, 
-        apiKey: process.env.API_KEY 
-      });
-      
-      if (job) {
-        await handleJob(job, logOnly);
+      let jobId = firstJobId;
+      while (jobId) {
+        try {
+          await processJob(jobId);
+        } catch (error) {
+          console.error("Error claiming/processing job:", error);
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+        const nextJob = await client.query(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey });
+        jobId = nextJob?._id;
       }
     } catch (error) {
-      console.error("Error claiming/processing job:", error);
+      // The subscription won't fire again for an unchanged result, so retry on our own
+      console.error(`Error fetching next pending job, retrying in ${RETRY_DELAY_MS}ms:`, error);
+      setTimeout(() => {
+        client.query(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey })
+          .then((job) => job && processPendingJobs(job._id))
+          .catch((error) => console.error("Error fetching next pending job:", error));
+      }, RETRY_DELAY_MS);
     } finally {
       isProcessing = false;
-      
-      // Check if there are more pending jobs and process them
-      const nextJob = await client.query(api.printJobs.getOldestPendingJob, { 
-        clientId: clientId as string, 
-        apiKey: process.env.API_KEY 
-      });
-      if (nextJob) {
-        await processJob(nextJob._id);
-      }
     }
   }
 
+  // Keep running on unexpected errors instead of crashing the print server
+  process.on('unhandledRejection', (error) => {
+    console.error("Unhandled rejection:", error);
+  });
+
+  // Jobs still marked as printing belong to a previous run of this client that was terminated mid-job
+  try {
+    const released = await client.mutation(api.printJobs.releaseClaimedJobs, { clientId, apiKey });
+    if (released > 0) {
+      console.log(`Requeued ${released} job(s) interrupted by a previous run.`);
+    }
+  } catch (error) {
+    console.error("Error requeuing interrupted jobs:", error);
+  }
+
   // Use reactive subscription to watch for pending jobs (handles both startup and incoming)
-  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId: clientId as string, apiKey: process.env.API_KEY }, async (pendingJob) => {
+  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId, apiKey }, (pendingJob) => {
     if (pendingJob && !isProcessing) {
-      await processJob(pendingJob._id);
+      processPendingJobs(pendingJob._id);
     }
   });
 }
