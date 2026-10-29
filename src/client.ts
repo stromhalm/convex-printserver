@@ -268,12 +268,26 @@ export async function main() {
     console.error("Error requeuing interrupted jobs:", error);
   }
 
-  // Use reactive subscription to watch for pending jobs (handles both startup and incoming)
-  client.onUpdate(api.printJobs.getOldestPendingJob, { clientId, apiKey }, (pendingJob) => {
-    if (pendingJob && !isProcessing) {
-      processPendingJobs(pendingJob._id);
-    }
-  });
+  // Use reactive subscription to watch for pending jobs (handles both startup and incoming).
+  // A query error (e.g. a transient Convex "Server Error") leaves the subscription stuck on the
+  // error result, so no further jobs would arrive. Resubscribe to make the server rerun the query.
+  function subscribeToPendingJobs() {
+    const unsubscribe = client.onUpdate(
+      api.printJobs.getOldestPendingJob,
+      { clientId: clientId as string, apiKey },
+      (pendingJob) => {
+        if (pendingJob && !isProcessing) {
+          processPendingJobs(pendingJob._id);
+        }
+      },
+      (error) => {
+        console.error(`Error in pending job subscription, resubscribing in ${RETRY_DELAY_MS}ms:`, error);
+        unsubscribe();
+        setTimeout(subscribeToPendingJobs, RETRY_DELAY_MS);
+      },
+    );
+  }
+  subscribeToPendingJobs();
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
