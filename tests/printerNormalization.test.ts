@@ -5,7 +5,7 @@ import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 describe("Printer Name Normalization", () => {
-  const fakeFileId = "12345;_storage" as Id<"_storage">;
+  const fakeFileId = "12345_storage" as Id<"_storage">;
 
   beforeEach(() => {
     vi.spyOn(console, "warn").mockImplementation(() => {});

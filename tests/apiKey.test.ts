@@ -5,7 +5,7 @@ import schema from "../convex/schema.js";
 import type { Id } from "../convex/_generated/dataModel.js";
 
 describe("API Key Enforcement", () => {
-  const fakeFileId = "12345;_storage" as Id<"_storage">;
+  const fakeFileId = "12345_storage" as Id<"_storage">;
 
   let prevApiKey: string | undefined;
   beforeEach(() => {

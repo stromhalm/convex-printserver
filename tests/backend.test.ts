@@ -19,7 +19,7 @@ describe("Print Job Backend Logic", () => {
     }
   });
   // A fake storage ID that passes the validator in convex-test
-  const fakeFileId = "12345;_storage" as Id<"_storage">;
+  const fakeFileId = "12345_storage" as Id<"_storage">;
 
   test("should create a print job", async () => {
     const t = convexTest(schema);
